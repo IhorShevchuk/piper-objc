@@ -52,8 +52,6 @@ typedef enum PiperStatus : NSInteger
                   speakerId,
                   false);
 
-        voice.synthesisConfig.lengthScale = 0.2;
-        voice.synthesisConfig.sentenceSilenceSeconds = 2;
         if (config.useESpeak)
         {
             config.eSpeakDataPath = [[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""].UTF8String;
