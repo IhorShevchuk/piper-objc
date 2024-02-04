@@ -14,10 +14,8 @@ let package = Package(
             targets: ["piper-objc"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/IhorShevchuk/espeak-ng-spm",
-                 revision: "15b87671e3c7486b6a4404f997b1ae59a7eae441"),
         .package(url: "https://github.com/IhorShevchuk/piper",
-                 revision: "84035c399351719f14d2f99e477590dd333dcb54"),
+                 revision: "d3aa5943bf05b5740f9038186eb6cc93b6283cac"),
     ],
     targets: [
         .target(name: "piper-objc",
