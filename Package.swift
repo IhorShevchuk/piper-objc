@@ -15,7 +15,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/IhorShevchuk/piper",
-                 revision: "d3aa5943bf05b5740f9038186eb6cc93b6283cac"),
+                 revision: "e506e5259e177a662f7ec57a2131be9fc63191e6"),
     ],
     targets: [
         .target(name: "piper-objc",
