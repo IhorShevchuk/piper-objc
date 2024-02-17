@@ -1,6 +1,6 @@
 //
 //  piper.h
-//  
+//
 //
 //  Created by Ihor Shevchuk on 22.11.2023.
 //
@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithModelPath:(NSString *)modelPath
                     andConfigPath:(NSString *)modelConfigPath;
 - (void)synthesize:(NSString *)text;
-- (NSArray<NSNumber *> * __nullable)popSamplesWithMaxLength:(NSUInteger)length;
+- (NSArray<NSNumber *> *__nullable)popSamplesWithMaxLength:(NSUInteger)length;
 - (BOOL)completed;
 - (BOOL)hasSamplesLeft;
 - (BOOL)readyToRead;

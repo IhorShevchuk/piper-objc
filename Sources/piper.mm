@@ -10,6 +10,9 @@
 #import <piper.h>
 #include <piper.hpp>
 
+#import "NSString+Utils.h"
+#import "NSString+stdStringAddtitons.h"
+
 typedef enum PiperStatus : NSInteger
 {
     PiperStatusCreated,
@@ -44,15 +47,14 @@ typedef enum PiperStatus : NSInteger
     {
         std::optional<piper::SpeakerId> speakerId;
         loadVoice(config,
-                  /// TODO: add NSString <-> std::string converters
-                  model.UTF8String,
-                  modelConfig.UTF8String,
+                  StringFromNSString(model),
+                  StringFromNSString(modelConfig),
                   voice,
                   speakerId);
 
         if (config.useESpeak)
         {
-            config.eSpeakDataPath = [[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""].UTF8String;
+            config.eSpeakDataPath = StringFromNSString([[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""]);
         }
 
         piper::initialize(config);
@@ -63,6 +65,7 @@ typedef enum PiperStatus : NSInteger
 
 - (void)dealloc
 {
+    [self cancel];
     piper::terminate(config);
 }
 
@@ -70,7 +73,20 @@ typedef enum PiperStatus : NSInteger
 {
     __weak Piper *weakSelf = self;
     [self.operationQueue addOperationWithBlock:^{
-        [weakSelf doSynthesize:text];
+        [weakSelf clearQueue];
+        weakSelf.status = PiperStatusRendering;
+    }];
+
+    NSArray *sentences = [text sentences];
+    for (NSString *sentence in sentences)
+    {
+        [self.operationQueue addOperationWithBlock:^{
+            [weakSelf doSynthesize:text];
+        }];
+    }
+
+    [self.operationQueue addOperationWithBlock:^{
+        weakSelf.status = PiperStatusCompleted;
     }];
 }
 
@@ -87,7 +103,7 @@ typedef enum PiperStatus : NSInteger
     self.status = PiperStatusCreated;
 }
 
-- (NSArray<NSNumber *> * __nullable)popSamplesWithMaxLength:(NSUInteger)length
+- (NSArray<NSNumber *> *__nullable)popSamplesWithMaxLength:(NSUInteger)length
 {
     if (![self hasSamplesLeft])
     {
@@ -147,9 +163,6 @@ typedef enum PiperStatus : NSInteger
 
 - (void)doSynthesize:(NSString *)text
 {
-    [self clearQueue];
-    self.status = PiperStatusRendering;
-
     piper::SynthesisResult result;
     std::vector<int16_t> audioBuffer;
     bool audioReady = false;
@@ -177,12 +190,10 @@ typedef enum PiperStatus : NSInteger
     };
     piper::textToAudio(config,
                        voice,
-                       text.UTF8String,
+                       StringFromNSString(text),
                        audioBuffer,
                        result,
                        audioCallback);
-
-    self.status = PiperStatusCompleted;
 }
 
 - (NSUInteger)length

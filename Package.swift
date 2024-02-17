@@ -22,7 +22,11 @@ let package = Package(
                     .product(name: "piper", package: "piper-spm")
                 ],
                 path: "Sources",
-                resources: [
+                cxxSettings: [
+                    .headerSearchPath("utils")
+                ],
+                linkerSettings: [
+                    .linkedFramework("NaturalLanguage")
                 ]
                )
     ],
