@@ -1,5 +1,5 @@
 //
-//  Piper.m
+//  piper.m
 //
 //
 //  Created by Ihor Shevchuk on 22.11.2023.
@@ -8,8 +8,7 @@
 #include <queue>
 
 #import <piper.h>
-
-#include "piper.hpp"
+#include <piper.hpp>
 
 typedef enum PiperStatus : NSInteger
 {
@@ -49,8 +48,7 @@ typedef enum PiperStatus : NSInteger
                   model.UTF8String,
                   modelConfig.UTF8String,
                   voice,
-                  speakerId,
-                  false);
+                  speakerId);
 
         if (config.useESpeak)
         {

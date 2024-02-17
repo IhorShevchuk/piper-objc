@@ -1,4 +1,3 @@
-
 // swift-tools-version: 5.8
 
 import PackageDescription
@@ -11,16 +10,16 @@ let package = Package(
     products: [
         .library(
             name: "piper-objc",
-            targets: ["piper-objc"]),
+            targets: ["piper-objc"])
     ],
     dependencies: [
-        .package(url: "https://github.com/IhorShevchuk/piper",
-                 revision: "e506e5259e177a662f7ec57a2131be9fc63191e6"),
+        .package(url: "https://github.com/IhorShevchuk/piper-spm",
+                      .upToNextMajor(from: "2023.11.14"))
     ],
     targets: [
         .target(name: "piper-objc",
                 dependencies: [
-                    .product(name: "piper", package: "piper")
+                    .product(name: "piper", package: "piper-spm")
                 ],
                 path: "Sources",
                 resources: [
