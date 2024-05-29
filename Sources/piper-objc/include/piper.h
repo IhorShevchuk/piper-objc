@@ -18,6 +18,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)hasSamplesLeft;
 - (BOOL)readyToRead;
 - (void)cancel;
+
+- (void)synthesize:(NSString *)text
+      toFileAtPath:(NSString *)path
+        completion:(dispatch_block_t)completion;
 @end
 
 NS_ASSUME_NONNULL_END

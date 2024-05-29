@@ -10,6 +10,9 @@
 #import <piper.h>
 #include <piper.hpp>
 
+#include <iostream>
+#include <fstream>
+
 #import "NSString+Utils.h"
 #import "NSString+stdStringAddtitons.h"
 
@@ -90,6 +93,31 @@ typedef enum PiperStatus : NSInteger
     }];
 }
 
+- (void)synthesize:(NSString *)text
+      toFileAtPath:(NSString *)path
+        completion:(dispatch_block_t)completion
+{
+    __weak Piper *weakSelf = self;
+    [self.operationQueue addOperationWithBlock:^{
+        [weakSelf clearQueue];
+        weakSelf.status = PiperStatusRendering;
+    }];
+
+    [self.operationQueue addOperationWithBlock:^{
+        [weakSelf doSynthesize:text
+                  toFileAtPath:path];
+    }];
+
+
+    [self.operationQueue addOperationWithBlock:^{
+        weakSelf.status = PiperStatusCompleted;
+        if (completion)
+        {
+            completion();
+        }
+    }];
+}
+
 - (void)cancel
 {
     [self.operationQueue cancelAllOperations];
@@ -165,7 +193,6 @@ typedef enum PiperStatus : NSInteger
 {
     piper::SynthesisResult result;
     std::vector<int16_t> audioBuffer;
-    bool audioReady = false;
 
     __weak Piper *weakSelf = self;
     auto audioCallback = [&audioBuffer, &weakSelf]() {
@@ -194,6 +221,22 @@ typedef enum PiperStatus : NSInteger
                        audioBuffer,
                        result,
                        audioCallback);
+}
+
+- (void)doSynthesize:(NSString *)text
+        toFileAtPath:(NSString *)path
+{
+    @synchronized (self)
+    {
+        std::ofstream file(StringFromNSString(path).c_str());
+        piper::SynthesisResult result;
+        piper::textToWavFile(config,
+                             voice,
+                             StringFromNSString(text),
+                             file,
+                             result);
+        file.close();
+    }
 }
 
 - (NSUInteger)length
