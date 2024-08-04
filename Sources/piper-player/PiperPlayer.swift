@@ -33,6 +33,7 @@ public class PiperPlayer {
 #if canImport(AVFoundation)
     private var player: AVPlayer?
     private var playerContinuation: CheckedContinuation<Void, any Error>?
+    private let playerContinuationLock = NSLock()
 #endif
 
     public init(params: Params) {
@@ -61,10 +62,7 @@ public class PiperPlayer {
     public func stopAndCancel() async {
         await player?.pause()
         player = nil
-        if let playerContinuation {
-            playerContinuation.resume()
-            self.playerContinuation = nil
-        }
+        resumePlayerContinuation()
     }
 #endif
 }
@@ -84,18 +82,18 @@ private extension PiperPlayer {
                 continuation.resume(throwing: PlayerError.noPlayer)
                 return
             }
+            
+            self?.playerContinuation = continuation
 
-            observerEnd = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: nil) { _ in
-                continuation.resume()
+            observerEnd = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: nil) { [weak self] _ in
+                self?.resumePlayerContinuation()
             }
 
-            statusObserver = item.observe(\.status, changeHandler: { item, _ in
+            statusObserver = item.observe(\.status, changeHandler: { [weak self] item, _ in
                 if let error = item.error {
-                    continuation.resume(throwing: error)
+                    self?.resumePlayerContinuation(throwing: error)
                 }
             })
-
-            self?.playerContinuation = continuation
 
             player.replaceCurrentItem(with: item)
             player.play()
@@ -105,8 +103,34 @@ private extension PiperPlayer {
             NotificationCenter.default.removeObserver(observerEnd, name: .AVPlayerItemDidPlayToEndTime, object: item)
         }
         statusObserver?.invalidate()
-        self.playerContinuation = nil
         await stopAndCancel()
+    }
+    
+    func resumePlayerContinuation(throwing error: Error? = nil) {
+        playerContinuationLock.withLock { [weak self] in
+            guard let continuation = self?.playerContinuation else {
+                return
+            }
+            
+            if let error {
+                continuation.resume(throwing: error)
+            } else {
+                continuation.resume()
+            }
+            self?.playerContinuation = nil
+        }
     }
 #endif
 }
+
+#if canImport(AVFoundation)
+fileprivate extension NSLock {
+    func withLock<T>(_ body: () -> T) -> T {
+        self.lock()
+        defer {
+            self.unlock()
+        }
+        return body()
+    }
+}
+#endif
