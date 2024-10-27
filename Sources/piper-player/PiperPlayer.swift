@@ -26,6 +26,7 @@ public class PiperPlayer {
 #if canImport(AVFoundation)
     enum PlayerError: Error {
         case noPlayer
+        case noPiperBackend
     }
 #endif
 
@@ -36,11 +37,14 @@ public class PiperPlayer {
     private let playerContinuationLock = NSLock()
 #endif
 
-    public init(params: Params) {
-        self.piper = piper_objc.Piper(modelPath: params.modelPath,
-                                      andConfigPath: params.configPath)
+    public init(params: Params) throws {
+        guard let piper = piper_objc.Piper(modelPath: params.modelPath,
+                                           andConfigPath: params.configPath) else {
+            throw PlayerError.noPiperBackend
+        }
+        self.piper = piper
 #if canImport(AVFoundation)
-        try? FileManager.default.createTempFolderIfNeeded(at: String.temporaryFolderPath)
+        try FileManager.default.createTempFolderIfNeeded(at: String.temporaryFolderPath)
 #endif
     }
 

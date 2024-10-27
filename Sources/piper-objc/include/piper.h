@@ -10,8 +10,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface Piper : NSObject
-- (instancetype)initWithModelPath:(NSString *)modelPath
-                    andConfigPath:(NSString *)modelConfigPath;
+- (nullable instancetype)initWithModelPath:(NSString *)modelPath
+                             andConfigPath:(NSString *)modelConfigPath;
 - (void)synthesize:(NSString *)text;
 - (NSArray<NSNumber *> *__nullable)popSamplesWithMaxLength:(NSUInteger)length;
 - (BOOL)completed;

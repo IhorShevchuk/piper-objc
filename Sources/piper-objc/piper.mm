@@ -42,18 +42,23 @@ typedef enum PiperStatus : NSInteger
 
 @implementation Piper
 
-- (instancetype)initWithModelPath:(NSString *)model
+- (nullable instancetype)initWithModelPath:(NSString *)model
                     andConfigPath:(NSString *)modelConfig
 {
     self = [super init];
     if (self)
     {
         std::optional<piper::SpeakerId> speakerId;
-        loadVoice(config,
-                  StringFromNSString(model),
-                  StringFromNSString(modelConfig),
-                  voice,
-                  speakerId);
+        try {
+            loadVoice(config,
+                      StringFromNSString(model),
+                      StringFromNSString(modelConfig),
+                      voice,
+                      speakerId);
+
+        } catch (std::exception exc) {
+            return nil;
+        }
 
         if (config.useESpeak)
         {
