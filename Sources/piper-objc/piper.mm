@@ -54,7 +54,8 @@ typedef enum PiperStatus : NSInteger
                       StringFromNSString(model),
                       StringFromNSString(modelConfig),
                       voice,
-                      speakerId);
+                      speakerId,
+                      NO);
 
         } catch (std::exception exc) {
             return nil;

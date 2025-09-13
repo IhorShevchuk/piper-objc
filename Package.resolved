@@ -41,8 +41,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/IhorShevchuk/piper-spm",
       "state" : {
-        "revision" : "7e4bc48a679272ccd4b3c0b401a8ad3e30d85aab",
-        "version" : "2023.11.14"
+        "revision" : "956aaa903199b484a27130b55cd229d08605ab29",
+        "version" : "2025.9.12"
       }
     },
     {
