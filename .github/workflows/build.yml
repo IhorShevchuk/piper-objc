@@ -1,0 +1,29 @@
+name: Build
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened] 
+    branches:
+      - 'main'
+  push:
+    branches:
+      - 'main'
+
+permissions:
+  contents: read
+  issues: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          clean: true
+          submodules: recursive
+      - name: Build
+        run: |
+          rm -fr .build | echo "Removed build folder"
+          swift build -c release
