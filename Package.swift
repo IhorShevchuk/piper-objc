@@ -19,13 +19,13 @@ let package = Package(
                  ])
     ],
     dependencies: [
-        .package(url: "https://github.com/IhorShevchuk/piper-spm",
-                 .upToNextMajor(from: "2025.09.12"))
+        .package(url: "https://github.com/IhorShevchuk/piper1-gpl-spm.git",
+                 from: "0.1.1")
     ],
     targets: [
         .target(name: "piper-objc",
                 dependencies: [
-                    .product(name: "piper", package: "piper-spm")
+                    .product(name: "piper1-gpl", package: "piper1-gpl-spm")
                 ],
                 path: "Sources/piper-objc",
                 cxxSettings: [

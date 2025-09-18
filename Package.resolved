@@ -3,55 +3,19 @@
     {
       "identity" : "espeak-ng-spm",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/IhorShevchuk/espeak-ng-spm",
+      "location" : "https://github.com/IhorShevchuk/espeak-ng-spm.git",
       "state" : {
-        "revision" : "15b87671e3c7486b6a4404f997b1ae59a7eae441",
-        "version" : "2023.9.13"
+        "revision" : "d1a0e917cf23b3f77efa4c9c96549e737cbc0987",
+        "version" : "2025.9.17"
       }
     },
     {
-      "identity" : "fmt-spm",
+      "identity" : "piper1-gpl-spm",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/IhorShevchuk/fmt-spm",
+      "location" : "https://github.com/IhorShevchuk/piper1-gpl-spm",
       "state" : {
-        "revision" : "f55d5919dac84653c0b84f454fa16b20eddf4c8d",
-        "version" : "10.2.1"
-      }
-    },
-    {
-      "identity" : "onnxruntime-swift-package-manager",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/microsoft/onnxruntime-swift-package-manager",
-      "state" : {
-        "revision" : "18e053d3442bea0848491c0363c170741693c2c1",
-        "version" : "1.16.0"
-      }
-    },
-    {
-      "identity" : "piper-phonemize-spm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/IhorShevchuk/piper-phonemize-spm",
-      "state" : {
-        "revision" : "6b5444677abe6ab95af92221ce818d2788615fb7",
-        "version" : "2023.11.14"
-      }
-    },
-    {
-      "identity" : "piper-spm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/IhorShevchuk/piper-spm",
-      "state" : {
-        "revision" : "956aaa903199b484a27130b55cd229d08605ab29",
-        "version" : "2025.9.12"
-      }
-    },
-    {
-      "identity" : "spdlog-spm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/IhorShevchuk/spdlog-spm",
-      "state" : {
-        "revision" : "cb404df86d4c48dd0850c90ed7603bebab5a286d",
-        "version" : "1.13.0"
+        "revision" : "cb0b6920b0b68f974a1e711c6e086ebedc7e5d70",
+        "version" : "0.1.1"
       }
     }
   ],

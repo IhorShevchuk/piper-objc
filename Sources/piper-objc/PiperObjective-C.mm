@@ -5,10 +5,10 @@
 //  Created by Ihor Shevchuk on 22.11.2023.
 //
 
-#include <queue>
+#import "PiperObjective-C.h"
 
-#import <piper.h>
-#include <piper.hpp>
+#include <queue>
+#include <piper.h>
 
 #include <iostream>
 #include <fstream>
@@ -31,8 +31,7 @@ typedef enum PiperStatus : NSInteger
 
 @interface Piper ()
 {
-    piper::PiperConfig config;
-    piper::Voice voice;
+    piper_synthesizer *synthesizer;
 
     NSOperationQueue *_operationQueue;
     std::queue<int16_t> _levelsQueue;
@@ -48,25 +47,14 @@ typedef enum PiperStatus : NSInteger
     self = [super init];
     if (self)
     {
-        std::optional<piper::SpeakerId> speakerId;
-        try {
-            loadVoice(config,
-                      StringFromNSString(model),
-                      StringFromNSString(modelConfig),
-                      voice,
-                      speakerId,
-                      NO);
-
-        } catch (std::exception exc) {
+        synthesizer = piper_create(
+                                   StringFromNSString(model).c_str(),
+                                   StringFromNSString(modelConfig).c_str(),
+                                   StringFromNSString([[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""]).c_str()
+                                   );
+        if (synthesizer == nullptr) {
             return nil;
         }
-
-        if (config.useESpeak)
-        {
-            config.eSpeakDataPath = StringFromNSString([[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""]);
-        }
-
-        piper::initialize(config);
         self.status = PiperStatusCreated;
     }
     return self;
@@ -75,7 +63,7 @@ typedef enum PiperStatus : NSInteger
 - (void)dealloc
 {
     [self cancel];
-    piper::terminate(config);
+    piper_free(synthesizer);
 }
 
 - (void)synthesize:(NSString *)text
@@ -197,36 +185,22 @@ typedef enum PiperStatus : NSInteger
 
 - (void)doSynthesize:(NSString *)text
 {
-    piper::SynthesisResult result;
-    std::vector<int16_t> audioBuffer;
-
-    __weak Piper *weakSelf = self;
-    auto audioCallback = [&audioBuffer, &weakSelf]() {
-        @synchronized(weakSelf)
-        {
-            auto strongSelf = weakSelf;
-            if (strongSelf == nullptr)
-            {
-                return;
-            }
-
-            if (strongSelf.status != PiperStatusRendering)
-            {
-                return;
-            }
-
-            for (const auto &level : audioBuffer)
-            {
-                strongSelf->_levelsQueue.push(level);
-            }
+    piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
+    piper_synthesize_start(synthesizer,
+                           StringFromNSString(text).c_str(),
+                           &options /* NULL for defaults */);
+    
+    piper_audio_chunk chunk;
+    while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+        const size_t size = chunk.num_samples;
+        if (size == 0) {
+            break;
         }
-    };
-    piper::textToAudio(config,
-                       voice,
-                       StringFromNSString(text),
-                       audioBuffer,
-                       result,
-                       audioCallback);
+        
+        for (size_t i = 0; i < size; ++i) {
+            _levelsQueue.push(static_cast<int16_t>(static_cast<unsigned char>(chunk.samples[i])));
+        }
+    }
 }
 
 - (void)doSynthesize:(NSString *)text
@@ -235,12 +209,16 @@ typedef enum PiperStatus : NSInteger
     @synchronized (self)
     {
         std::ofstream file(StringFromNSString(path).c_str());
-        piper::SynthesisResult result;
-        piper::textToWavFile(config,
-                             voice,
-                             StringFromNSString(text),
-                             file,
-                             result);
+        piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
+        piper_synthesize_start(synthesizer,
+                               StringFromNSString(text).c_str(),
+                               &options /* NULL for defaults */);
+        
+        piper_audio_chunk chunk;
+        while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+            file.write(reinterpret_cast<const char *>(chunk.samples),
+                       chunk.num_samples * sizeof(float));
+        }
         file.close();
     }
 }
