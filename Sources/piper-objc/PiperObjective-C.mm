@@ -25,6 +25,8 @@ typedef enum PiperStatus : NSInteger
     PiperStatusCanceled
 } PiperStatus;
 
+typedef void (^PiperAudioChunkReady)(piper_audio_chunk audioChunk);
+
 template<typename T> void write_number(T num, std::ostream& stream)
 {
   stream.write(reinterpret_cast<char*>(&num),sizeof(num));
@@ -125,7 +127,8 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
     for (NSString *sentence in sentences)
     {
         [self.operationQueue addOperationWithBlock:^{
-            [weakSelf doSynthesize:text];
+            [weakSelf doSynthesize:text
+                           options:piper_default_synthesize_options(synthesizer)];
         }];
     }
 
@@ -143,12 +146,16 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
         [weakSelf clearQueue];
         weakSelf.status = PiperStatusRendering;
     }];
-
+    
     [self.operationQueue addOperationWithBlock:^{
+        std::ofstream file;
         [weakSelf doSynthesize:text
-                  toFileAtPath:path];
+                  toFileAtPath:path
+                          file:file
+                       options:piper_default_synthesize_options(synthesizer)];
+        file.close();
     }];
-
+    
 
     [self.operationQueue addOperationWithBlock:^{
         weakSelf.status = PiperStatusCompleted;
@@ -231,8 +238,9 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 }
 
 - (void)doSynthesize:(NSString *)text
+             options:(piper_synthesize_options)options
+        onChunkReady:(PiperAudioChunkReady)audioChunkReady
 {
-    piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
     piper_synthesize_start(synthesizer,
                            StringFromNSString(text).c_str(),
                            &options /* NULL for defaults */);
@@ -243,37 +251,47 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
         if (size == 0) {
             break;
         }
-        
-        for (size_t i = 0; i < size; ++i) {
-            _levelsQueue.push(static_cast<int16_t>(static_cast<unsigned char>(chunk.samples[i])));
-        }
+        audioChunkReady(chunk);
     }
 }
 
 - (void)doSynthesize:(NSString *)text
         toFileAtPath:(NSString *)path
+             file:(std::ofstream &)file
+             options:(piper_synthesize_options)options
 {
-    @synchronized (self)
-    {
-        std::ofstream::openmode mode= std::ofstream::out | std::ofstream::binary;
-        std::ofstream file;
-        piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
-        piper_synthesize_start(synthesizer,
-                               StringFromNSString(text).c_str(),
-                               &options /* NULL for defaults */);
-        bool is_header_writen = false;
-        piper_audio_chunk chunk;
-        while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
-            if (!is_header_writen) {
-                file.open(StringFromNSString(path).c_str(), mode);
-                write_wav_stream_header(file, chunk.sample_rate);
-                is_header_writen = true;
-            }
-            file.write(reinterpret_cast<const char *>(chunk.samples),
-                       chunk.num_samples * sizeof(float));
+    std::ofstream::openmode mode = std::ofstream::out | std::ofstream::binary;
+    __block bool is_header_writen = false;
+    
+    [self doSynthesize:text
+                   options:piper_default_synthesize_options(synthesizer)
+            onChunkReady:^(piper_audio_chunk chunk) {
+        if (!is_header_writen) {
+            file.open(StringFromNSString(path).c_str(), mode);
+            write_wav_stream_header(file, chunk.sample_rate);
+            is_header_writen = true;
         }
-        file.close();
-    }
+        file.write(reinterpret_cast<const char *>(chunk.samples),
+                   chunk.num_samples * sizeof(float));
+    }];
+}
+
+- (void)doSynthesize:(NSString *)text
+             options:(piper_synthesize_options)options
+{
+    __weak Piper *weakSelf = self;
+    [self doSynthesize:text
+                   options:piper_default_synthesize_options(synthesizer)
+              onChunkReady:^(piper_audio_chunk chunk) {
+        if (weakSelf == nil) {
+            return;
+        }
+        Piper *strongSelf = weakSelf;
+        
+        for (size_t i = 0; i < chunk.num_samples; ++i) {
+            strongSelf->_levelsQueue.push(static_cast<int16_t>(static_cast<unsigned char>(chunk.samples[i])));
+        }
+    }];
 }
 
 - (NSUInteger)length
