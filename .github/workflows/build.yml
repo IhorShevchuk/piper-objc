@@ -26,4 +26,7 @@ jobs:
       - name: Build
         run: |
           rm -fr .build | echo "Removed build folder"
-          swift build -c release
+          swift build -c release \
+               --target piper-objc\
+               --target piper-player\
+               --target piper-sample

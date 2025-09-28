@@ -49,7 +49,6 @@ let package = Package(
                 .copy("resources/model.onnx"),
                 .copy("resources/model.onnx.json"),
                 .copy("resources/espeak-ng-data")
-                
             ]
         ),
     ],
