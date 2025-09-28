@@ -82,7 +82,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
     piper_synthesizer *synthesizer;
     
     NSOperationQueue *_operationQueue;
-    std::queue<int16_t> _levelsQueue;
+    std::queue<float> _levelsQueue;
     PiperSSMLParser *_ssmlParser;
 }
 
@@ -241,7 +241,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
             }
             const auto element = _levelsQueue.front();
             _levelsQueue.pop();
-            [result addObject:[NSNumber numberWithShort:element]];
+            [result addObject:[NSNumber numberWithFloat:element]];
         }
         return [result copy];
     }
@@ -331,7 +331,8 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
         Piper *strongSelf = weakSelf;
         
         for (size_t i = 0; i < chunk.num_samples; ++i) {
-            strongSelf->_levelsQueue.push(static_cast<int16_t>(static_cast<unsigned char>(chunk.samples[i])));
+            const float sample = chunk.samples[i];
+            strongSelf->_levelsQueue.push(sample);
         }
     }];
 }
@@ -380,7 +381,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 {
     @synchronized(self)
     {
-        std::queue<int16_t> empty;
+        std::queue<float> empty;
         std::swap(_levelsQueue, empty);
     }
 }
