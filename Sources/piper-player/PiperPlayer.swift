@@ -68,6 +68,14 @@ public class PiperPlayer {
         try await playItemAsync(playerItem)
         try FileManager.default.removeItem(atPath: path)
     }
+    
+    public func play(ssml: String) async throws {
+        let path = String.temporaryPath(extesnion: "wav")
+        await piper.synthesizeSSML(ssml, toFileAtPath: path)
+        let playerItem = AVPlayerItem(url: URL(fileURLWithPath: path))
+        try await playItemAsync(playerItem)
+        try FileManager.default.removeItem(atPath: path)
+    }
 
     public func stopAndCancel() async {
         await player?.pause()

@@ -13,6 +13,7 @@
 #include <iostream>
 #include <fstream>
 
+#import "PiperSSMLParser.h"
 #import "NSString+Utils.h"
 #import "NSString+stdStringAddtitons.h"
 
@@ -29,19 +30,19 @@ typedef void (^PiperAudioChunkReady)(piper_audio_chunk audioChunk);
 
 template<typename T> void write_number(T num, std::ostream& stream)
 {
-  stream.write(reinterpret_cast<char*>(&num),sizeof(num));
+    stream.write(reinterpret_cast<char*>(&num),sizeof(num));
 }
 
 static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
     const std::size_t unspec_count = 0x7ffff000;
-
+    
     // ChunkID
     stream.write("RIFF", 4);
     // ChunkSize = 36 + Subchunk2Size
     write_number<uint32_t>(unspec_count + 36, stream);
     // Format
     stream.write("WAVE", 4);
-
+    
     // Subchunk1ID
     stream.write("fmt ", 4);
     // Subchunk1Size = 16 for PCM/IEEE_FLOAT
@@ -58,11 +59,18 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
     write_number<uint16_t>(4, stream);
     // BitsPerSample = 32
     write_number<uint16_t>(32, stream);
-
+    
     // Subchunk2ID
     stream.write("data", 4);
     // Subchunk2Size = NumSamples * NumChannels * BitsPerSample/8
     write_number<uint32_t>(unspec_count, stream);
+}
+
+static piper_synthesize_options get_piper_synthesize_options(PiperFragment *fragment, piper_synthesizer *synthesizer)
+{
+    piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
+    options.length_scale = fragment.lengthScale;
+    return options;
 }
 
 @interface Piper ()
@@ -72,9 +80,10 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 @interface Piper ()
 {
     piper_synthesizer *synthesizer;
-
+    
     NSOperationQueue *_operationQueue;
     std::queue<int16_t> _levelsQueue;
+    PiperSSMLParser *_ssmlParser;
 }
 
 @end
@@ -118,7 +127,7 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 - (void)synthesize:(NSString *)text
 {
     [self addClearBeforeStartingOperation];
-
+    
     __weak Piper *weakSelf = self;
     NSArray *sentences = [text sentences];
     for (NSString *sentence in sentences)
@@ -128,7 +137,27 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
                            options:piper_default_synthesize_options(synthesizer)];
         }];
     }
+    
+    [self addMarkAsCompleteOperation:nil];
+}
 
+- (void)synthesizeSSML:(NSString *)ssml
+{
+    [self addClearBeforeStartingOperation];
+    __weak Piper *weakSelf = self;
+    
+    [self.operationQueue addOperationWithBlock:^{
+        Piper *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+        NSArray<PiperFragment *> *fragments = [[strongSelf ssmlParser] parse:ssml];
+        for (PiperFragment *fragment in fragments) {
+            [strongSelf doSynthesize:fragment.text
+                             options:get_piper_synthesize_options(fragment, synthesizer)];
+        }
+    }];
+    
     [self addMarkAsCompleteOperation:nil];
 }
 
@@ -145,6 +174,34 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
                   toFileAtPath:path
                           file:file
                        options:piper_default_synthesize_options(synthesizer)];
+        file.close();
+    }];
+    
+    [self addMarkAsCompleteOperation:completion];
+}
+
+- (void)synthesizeSSML:(NSString *)ssml
+          toFileAtPath:(NSString *)path
+            completion:(dispatch_block_t)completion
+{
+    [self addClearBeforeStartingOperation];
+    
+    __weak Piper *weakSelf = self;
+    [self.operationQueue addOperationWithBlock:^{
+        Piper *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+        std::ofstream file;
+        
+        NSArray<PiperFragment *> *fragments = [[strongSelf ssmlParser] parse:ssml];
+        
+        for (PiperFragment *fragment in fragments) {
+            [strongSelf doSynthesize:fragment.text
+                        toFileAtPath:path
+                                file:file
+                             options:get_piper_synthesize_options(fragment, synthesizer)];
+        }
         file.close();
     }];
     
@@ -170,10 +227,10 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
     {
         return nil;
     }
-
+    
     NSUInteger lengthIntenal = MIN(length, [self length]);
     NSMutableArray *result = [[NSMutableArray alloc] initWithCapacity:lengthIntenal];
-
+    
     @synchronized(self)
     {
         for (int index = 0; index < lengthIntenal; ++index)
@@ -242,16 +299,16 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 
 - (void)doSynthesize:(NSString *)text
         toFileAtPath:(NSString *)path
-             file:(std::ofstream &)file
+                file:(std::ofstream &)file
              options:(piper_synthesize_options)options
 {
     std::ofstream::openmode mode = std::ofstream::out | std::ofstream::binary;
     __block bool is_header_writen = false;
     
     [self doSynthesize:text
-                   options:piper_default_synthesize_options(synthesizer)
-            onChunkReady:^(piper_audio_chunk chunk) {
-        if (!is_header_writen) {
+               options:options
+          onChunkReady:^(piper_audio_chunk chunk) {
+        if (!is_header_writen && !file.is_open()) {
             file.open(StringFromNSString(path).c_str(), mode);
             write_wav_stream_header(file, chunk.sample_rate);
             is_header_writen = true;
@@ -266,8 +323,8 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 {
     __weak Piper *weakSelf = self;
     [self doSynthesize:text
-                   options:piper_default_synthesize_options(synthesizer)
-              onChunkReady:^(piper_audio_chunk chunk) {
+               options:options
+          onChunkReady:^(piper_audio_chunk chunk) {
         if (weakSelf == nil) {
             return;
         }
@@ -297,6 +354,18 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
             completion();
         }
     }];
+}
+
+- (PiperSSMLParser *)ssmlParser
+{
+    if (_ssmlParser != nil) {
+        return _ssmlParser;
+    }
+    @synchronized(self)
+    {
+        _ssmlParser = [PiperSSMLParser new];
+        return _ssmlParser;
+    }
 }
 
 - (NSUInteger)length

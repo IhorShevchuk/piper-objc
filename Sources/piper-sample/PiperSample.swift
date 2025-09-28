@@ -49,7 +49,7 @@ struct PiperSample {
         
         Task {
             do {
-                try await player.play(text: "Привіт. Мене звуть Лада.")
+                try await player.play(ssml: "<speak><prosody rate=\"50.0%\" volume=\"-1.0dB\"> Привіт.</prosody> Мене звуть Лада.</speak>")
             } catch {
                 print("Catched an error: \(error)")
             }
