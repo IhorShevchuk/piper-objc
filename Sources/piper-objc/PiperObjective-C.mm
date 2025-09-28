@@ -25,6 +25,44 @@ typedef enum PiperStatus : NSInteger
     PiperStatusCanceled
 } PiperStatus;
 
+template<typename T> void write_number(T num, std::ostream& stream)
+{
+  stream.write(reinterpret_cast<char*>(&num),sizeof(num));
+}
+
+static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
+    const std::size_t unspec_count = 0x7ffff000;
+
+    // ChunkID
+    stream.write("RIFF", 4);
+    // ChunkSize = 36 + Subchunk2Size
+    write_number<uint32_t>(unspec_count + 36, stream);
+    // Format
+    stream.write("WAVE", 4);
+
+    // Subchunk1ID
+    stream.write("fmt ", 4);
+    // Subchunk1Size = 16 for PCM/IEEE_FLOAT
+    write_number<uint32_t>(16, stream);
+    // AudioFormat = 3 (IEEE float)
+    write_number<uint16_t>(3, stream);
+    // NumChannels = 1 (mono)
+    write_number<uint16_t>(1, stream);
+    // SampleRate
+    write_number<uint32_t>(sample_rate, stream);
+    // ByteRate = SampleRate * NumChannels * BitsPerSample/8
+    write_number<uint32_t>(sample_rate * 4, stream);
+    // BlockAlign = NumChannels * BitsPerSample/8
+    write_number<uint16_t>(4, stream);
+    // BitsPerSample = 32
+    write_number<uint16_t>(32, stream);
+
+    // Subchunk2ID
+    stream.write("data", 4);
+    // Subchunk2Size = NumSamples * NumChannels * BitsPerSample/8
+    write_number<uint32_t>(unspec_count, stream);
+}
+
 @interface Piper ()
 @property (atomic, assign) PiperStatus status;
 @end
@@ -208,14 +246,20 @@ typedef enum PiperStatus : NSInteger
 {
     @synchronized (self)
     {
-        std::ofstream file(StringFromNSString(path).c_str());
+        std::ofstream::openmode mode= std::ofstream::out | std::ofstream::binary;
+        std::ofstream file;
         piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
         piper_synthesize_start(synthesizer,
                                StringFromNSString(text).c_str(),
                                &options /* NULL for defaults */);
-        
+        bool is_header_writen = false;
         piper_audio_chunk chunk;
         while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+            if (!is_header_writen) {
+                file.open(StringFromNSString(path).c_str(), mode);
+                write_wav_stream_header(file, chunk.sample_rate);
+                is_header_writen = true;
+            }
             file.write(reinterpret_cast<const char *>(chunk.samples),
                        chunk.num_samples * sizeof(float));
         }
