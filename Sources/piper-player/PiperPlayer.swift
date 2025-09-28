@@ -15,11 +15,16 @@ import AVFoundation
 
 public class PiperPlayer {
     public struct Params {
-        public let modelPath: String
-        public let configPath: String
-        public init(modelPath: String, configPath: String) {
+        let modelPath: String
+        let configPath: String
+        let espeakNGData: String
+        public init(modelPath: String,
+                    configPath: String,
+                    espeakNGData: String? = nil
+        ) {
             self.modelPath = modelPath
             self.configPath = configPath
+            self.espeakNGData = espeakNGData ?? (Bundle.main.path(forResource: "espeak-ng-data", ofType: "") ?? "")
         }
     }
 
@@ -39,7 +44,8 @@ public class PiperPlayer {
 
     public init(params: Params) throws {
         guard let piper = piper_objc.Piper(modelPath: params.modelPath,
-                                           andConfigPath: params.configPath) else {
+                                           configPath: params.configPath,
+                                           espeakNGData: params.espeakNGData) else {
             throw PlayerError.noPiperBackend
         }
         self.piper = piper

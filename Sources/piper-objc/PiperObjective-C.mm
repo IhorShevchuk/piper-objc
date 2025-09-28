@@ -79,8 +79,17 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 
 @implementation Piper
 
+- (nullable instancetype)initWithModelPath:(NSString *)modelPath
+                             andConfigPath:(NSString *)modelConfigPath
+{
+    return [self initWithModelPath:modelPath
+                        configPath:modelConfigPath
+                      espeakNGData:[[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""]];
+}
+
 - (nullable instancetype)initWithModelPath:(NSString *)model
-                    andConfigPath:(NSString *)modelConfig
+                                configPath:(NSString *)modelConfig
+                              espeakNGData:(NSString *)espeakNGData
 {
     self = [super init];
     if (self)
@@ -88,7 +97,7 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
         synthesizer = piper_create(
                                    StringFromNSString(model).c_str(),
                                    StringFromNSString(modelConfig).c_str(),
-                                   StringFromNSString([[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""]).c_str()
+                                   StringFromNSString(espeakNGData).c_str()
                                    );
         if (synthesizer == nullptr) {
             return nil;
