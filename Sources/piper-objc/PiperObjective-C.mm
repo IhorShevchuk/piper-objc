@@ -117,12 +117,9 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
 
 - (void)synthesize:(NSString *)text
 {
-    __weak Piper *weakSelf = self;
-    [self.operationQueue addOperationWithBlock:^{
-        [weakSelf clearQueue];
-        weakSelf.status = PiperStatusRendering;
-    }];
+    [self addClearBeforeStartingOperation];
 
+    __weak Piper *weakSelf = self;
     NSArray *sentences = [text sentences];
     for (NSString *sentence in sentences)
     {
@@ -132,21 +129,16 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
         }];
     }
 
-    [self.operationQueue addOperationWithBlock:^{
-        weakSelf.status = PiperStatusCompleted;
-    }];
+    [self addMarkAsCompleteOperation:nil];
 }
 
 - (void)synthesize:(NSString *)text
       toFileAtPath:(NSString *)path
         completion:(dispatch_block_t)completion
 {
-    __weak Piper *weakSelf = self;
-    [self.operationQueue addOperationWithBlock:^{
-        [weakSelf clearQueue];
-        weakSelf.status = PiperStatusRendering;
-    }];
+    [self addClearBeforeStartingOperation];
     
+    __weak Piper *weakSelf = self;
     [self.operationQueue addOperationWithBlock:^{
         std::ofstream file;
         [weakSelf doSynthesize:text
@@ -156,14 +148,7 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
         file.close();
     }];
     
-
-    [self.operationQueue addOperationWithBlock:^{
-        weakSelf.status = PiperStatusCompleted;
-        if (completion)
-        {
-            completion();
-        }
-    }];
+    [self addMarkAsCompleteOperation:completion];
 }
 
 - (void)cancel
@@ -290,6 +275,26 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
         
         for (size_t i = 0; i < chunk.num_samples; ++i) {
             strongSelf->_levelsQueue.push(static_cast<int16_t>(static_cast<unsigned char>(chunk.samples[i])));
+        }
+    }];
+}
+
+- (void)addClearBeforeStartingOperation
+{
+    __weak Piper *weakSelf = self;
+    [self.operationQueue addOperationWithBlock:^{
+        [weakSelf clearQueue];
+        weakSelf.status = PiperStatusRendering;
+    }];
+}
+
+- (void)addMarkAsCompleteOperation:(dispatch_block_t)completion
+{
+    __weak Piper *weakSelf = self;
+    [self.operationQueue addOperationWithBlock:^{
+        weakSelf.status = PiperStatusCompleted;
+        if (completion) {
+            completion();
         }
     }];
 }
