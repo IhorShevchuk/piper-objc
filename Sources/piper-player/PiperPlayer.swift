@@ -24,7 +24,7 @@ public class PiperPlayer {
         ) {
             self.modelPath = modelPath
             self.configPath = configPath
-            self.espeakNGData = espeakNGData ?? (Bundle.main.path(forResource: "espeak-ng-data", ofType: "") ?? "")
+            self.espeakNGData = espeakNGData ?? ""
         }
     }
 

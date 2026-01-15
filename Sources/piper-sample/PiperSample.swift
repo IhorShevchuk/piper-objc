@@ -30,10 +30,6 @@ struct PiperSample {
         return moduleBunlde?.path(forResource: "model.onnx", ofType: "json")
     }
     
-    static var espeakNGData: String? {
-        return moduleBunlde?.path(forResource: "espeak-ng-data", ofType: "")
-    }
-    
     static func main() throws {
         guard let modelPath else {
             throw Error.noModelPath
@@ -43,8 +39,7 @@ struct PiperSample {
         }
         
         let params = PiperPlayer.Params(modelPath: modelPath,
-                                        configPath: configPath,
-                                        espeakNGData: espeakNGData)
+                                        configPath: configPath)
         let player = try PiperPlayer(params: params)
         
         Task {

@@ -21,12 +21,16 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/IhorShevchuk/piper1-gpl-spm.git",
-                 from: "0.1.1")
+                 from: "0.1.1"),
+        .package(url: "https://github.com/IhorShevchuk/espeak-ng-spm.git",
+                     from: "2025.9.17"
+                     )
     ],
     targets: [
         .target(name: "piper-objc",
                 dependencies: [
-                    .product(name: "piper1-gpl", package: "piper1-gpl-spm")
+                    .product(name: "piper1-gpl", package: "piper1-gpl-spm"),
+                    .product(name: "espeak-ng-data", package: "espeak-ng-spm")
                 ],
                 path: "Sources/piper-objc",
                 cxxSettings: [
@@ -48,7 +52,6 @@ let package = Package(
             resources: [
                 .copy("resources/model.onnx"),
                 .copy("resources/model.onnx.json"),
-                .copy("resources/espeak-ng-data")
             ]
         ),
     ],

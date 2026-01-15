@@ -7,6 +7,8 @@
 
 #import "PiperObjective-C.h"
 
+#import <espeak-ng/bundle.h>
+
 #include <queue>
 #include <piper.h>
 
@@ -90,12 +92,25 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 
 @implementation Piper
 
++ (NSString *)ensureEspeakLibDataInstalled
+{
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSError *error = nil;
+    [EspeakLib ensureBundleInstalledInRoot:[NSURL fileURLWithPath:documentsPath] error:&error];
+    if (error)
+    {
+        NSLog(@"Error during copying Espeak files: %@", error);
+    }
+    return documentsPath;
+}
+
 - (nullable instancetype)initWithModelPath:(NSString *)modelPath
                              andConfigPath:(NSString *)modelConfigPath
 {
+    NSString *espeakNGData = [Piper ensureEspeakLibDataInstalled];
     return [self initWithModelPath:modelPath
                         configPath:modelConfigPath
-                      espeakNGData:[[NSBundle mainBundle] pathForResource:@"espeak-ng-data" ofType:@""]];
+                      espeakNGData:espeakNGData];
 }
 
 - (nullable instancetype)initWithModelPath:(NSString *)model
@@ -105,10 +120,15 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
     self = [super init];
     if (self)
     {
+        NSString *espeakNGDataInternal = espeakNGData;
+        if ([espeakNGDataInternal length] == 0)
+        {
+            espeakNGDataInternal = [Piper ensureEspeakLibDataInstalled];
+        }
         synthesizer = piper_create(
                                    StringFromNSString(model).c_str(),
                                    StringFromNSString(modelConfig).c_str(),
-                                   StringFromNSString(espeakNGData).c_str()
+                                   StringFromNSString(espeakNGDataInternal).c_str()
                                    );
         if (synthesizer == nullptr) {
             return nil;
