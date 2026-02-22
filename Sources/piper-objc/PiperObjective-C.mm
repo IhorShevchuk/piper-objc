@@ -10,6 +10,7 @@
 #import <espeak-ng/bundle.h>
 
 #include <queue>
+#include <shared_mutex>
 #include <piper.h>
 
 #include <iostream>
@@ -82,9 +83,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 @interface Piper ()
 {
     piper_synthesizer *synthesizer;
-    
     NSOperationQueue *_operationQueue;
-    std::queue<float> _levelsQueue;
     PiperSSMLParser *_ssmlParser;
 }
 
@@ -149,14 +148,18 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
     [self addClearBeforeStartingOperation];
     
     __weak Piper *weakSelf = self;
-    NSArray *sentences = [text sentences];
-    for (NSString *sentence in sentences)
-    {
-        [self.operationQueue addOperationWithBlock:^{
-            [weakSelf doSynthesize:text
-                           options:piper_default_synthesize_options(synthesizer)];
+    [self.operationQueue addOperationWithBlock:^{
+        [weakSelf doSynthesize:text
+                       options:piper_default_synthesize_options(synthesizer)
+                  onChunkReady:^(piper_audio_chunk chunk) {
+            if (weakSelf == nil) {
+                return;
+            }
+            Piper *strongSelf = weakSelf;
+            [strongSelf.delegate piperDidReceiveSamples:chunk.samples
+                                               withSize:chunk.num_samples];
         }];
-    }
+    }];
     
     [self addMarkAsCompleteOperation:nil];
 }
@@ -174,7 +177,15 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
         NSArray<PiperFragment *> *fragments = [[strongSelf ssmlParser] parse:ssml];
         for (PiperFragment *fragment in fragments) {
             [strongSelf doSynthesize:fragment.text
-                             options:get_piper_synthesize_options(fragment, synthesizer)];
+                             options:get_piper_synthesize_options(fragment, synthesizer)
+                        onChunkReady:^(piper_audio_chunk chunk) {
+                if (weakSelf == nil) {
+                    return;
+                }
+                Piper *strongSelf = weakSelf;
+                [strongSelf.delegate piperDidReceiveSamples:chunk.samples
+                                                   withSize:chunk.num_samples];
+            }];
         }
     }];
     
@@ -231,45 +242,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 - (void)cancel
 {
     [self.operationQueue cancelAllOperations];
-    if (self.status == PiperStatusRendering)
-    {
-        @synchronized(self)
-        {
-            [self clearQueue];
-        }
-    }
     self.status = PiperStatusCreated;
-}
-
-- (NSArray<NSNumber *> *__nullable)popSamplesWithMaxLength:(NSUInteger)length
-{
-    if (![self hasSamplesLeft])
-    {
-        return nil;
-    }
-    
-    NSUInteger lengthIntenal = MIN(length, [self length]);
-    NSMutableArray *result = [[NSMutableArray alloc] initWithCapacity:lengthIntenal];
-    
-    @synchronized(self)
-    {
-        for (int index = 0; index < lengthIntenal; ++index)
-        {
-            if (_levelsQueue.empty())
-            {
-                break;
-            }
-            const auto element = _levelsQueue.front();
-            _levelsQueue.pop();
-            [result addObject:[NSNumber numberWithFloat:element]];
-        }
-        return [result copy];
-    }
-}
-
-- (BOOL)hasSamplesLeft
-{
-    return self.length > 0;
 }
 
 - (BOOL)completed
@@ -279,22 +252,24 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 
 - (BOOL)readyToRead
 {
-    return (self.status == PiperStatusRendering || [self completed]) && [self hasSamplesLeft];
+    return (self.status == PiperStatusRendering || [self completed]);
 }
 
 #pragma mark - Private
 
 - (NSOperationQueue *)operationQueue
 {
+    if (_operationQueue)
+    {
+        return _operationQueue;
+    }
     @synchronized(self)
     {
-        if (_operationQueue == nil)
-        {
-            _operationQueue = [[NSOperationQueue alloc] init];
-            _operationQueue.name = [NSString stringWithFormat:@"%@Queue", NSStringFromClass([self class])];
-            _operationQueue.maxConcurrentOperationCount = 1;
-            _operationQueue.qualityOfService = NSQualityOfServiceUserInteractive;
-        }
+        _operationQueue = [[NSOperationQueue alloc] init];
+        _operationQueue.name = [NSString stringWithFormat:@"%@Queue", NSStringFromClass([self class])];
+        _operationQueue.maxConcurrentOperationCount = 1;
+        _operationQueue.qualityOfService = NSQualityOfServiceUserInteractive;
+        
         return _operationQueue;
     }
 }
@@ -307,13 +282,18 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
                            StringFromNSString(text).c_str(),
                            &options /* NULL for defaults */);
     
+    __block NSUInteger sentencePosition = 0;
+    __block NSUInteger offset = 0;
+    const int kEndOfSentencePhonemPosition = 4;
     piper_audio_chunk chunk;
     while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
         const size_t size = chunk.num_samples;
         if (size == 0) {
             break;
         }
-        audioChunkReady(chunk);
+        if (audioChunkReady) {
+            audioChunkReady(chunk);
+        }
     }
 }
 
@@ -349,11 +329,8 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
             return;
         }
         Piper *strongSelf = weakSelf;
-        
-        for (size_t i = 0; i < chunk.num_samples; ++i) {
-            const float sample = chunk.samples[i];
-            strongSelf->_levelsQueue.push(sample);
-        }
+        [strongSelf.delegate piperDidReceiveSamples:chunk.samples
+                                           withSize:chunk.num_samples];
     }];
 }
 
@@ -361,7 +338,6 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 {
     __weak Piper *weakSelf = self;
     [self.operationQueue addOperationWithBlock:^{
-        [weakSelf clearQueue];
         weakSelf.status = PiperStatusRendering;
     }];
 }
@@ -386,23 +362,6 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
     {
         _ssmlParser = [PiperSSMLParser new];
         return _ssmlParser;
-    }
-}
-
-- (NSUInteger)length
-{
-    @synchronized(self)
-    {
-        return _levelsQueue.size();
-    }
-}
-
-- (void)clearQueue
-{
-    @synchronized(self)
-    {
-        std::queue<float> empty;
-        std::swap(_levelsQueue, empty);
     }
 }
 @end

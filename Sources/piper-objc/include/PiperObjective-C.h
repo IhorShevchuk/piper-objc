@@ -9,16 +9,18 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@protocol PiperDelegate <NSObject>
+- (void)piperDidReceiveSamples:(const float* _Nonnull)samples withSize:(NSInteger)count;
+@end
+
 @interface Piper : NSObject
+@property (nonatomic, weak) id<PiperDelegate> delegate;
 - (nullable instancetype)initWithModelPath:(NSString *)modelPath
                              andConfigPath:(NSString *)modelConfigPath;
 - (nullable instancetype)initWithModelPath:(NSString *)modelPath
                                 configPath:(NSString *)modelConfigPath
                               espeakNGData:(NSString *)espeakNGData;
-
-- (NSArray<NSNumber *> *__nullable)popSamplesWithMaxLength:(NSUInteger)length;
 - (BOOL)completed;
-- (BOOL)hasSamplesLeft;
 - (BOOL)readyToRead;
 - (void)cancel;
 
