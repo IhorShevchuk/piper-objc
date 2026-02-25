@@ -12,7 +12,7 @@
     {
       "identity" : "piper1-gpl-spm",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/IhorShevchuk/piper1-gpl-spm",
+      "location" : "https://github.com/IhorShevchuk/piper1-gpl-spm.git",
       "state" : {
         "revision" : "cb0b6920b0b68f974a1e711c6e086ebedc7e5d70",
         "version" : "0.1.1"

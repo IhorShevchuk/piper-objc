@@ -242,17 +242,12 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 - (void)cancel
 {
     [self.operationQueue cancelAllOperations];
-    self.status = PiperStatusCreated;
+    self.status = PiperStatusCanceled;
 }
 
 - (BOOL)completed
 {
     return self.status == PiperStatusCompleted;
-}
-
-- (BOOL)readyToRead
-{
-    return (self.status == PiperStatusRendering || [self completed]);
 }
 
 #pragma mark - Private
@@ -281,12 +276,8 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
     piper_synthesize_start(synthesizer,
                            StringFromNSString(text).c_str(),
                            &options /* NULL for defaults */);
-    
-    __block NSUInteger sentencePosition = 0;
-    __block NSUInteger offset = 0;
-    const int kEndOfSentencePhonemPosition = 4;
     piper_audio_chunk chunk;
-    while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+    while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE && self.status != PiperStatusCanceled) {
         const size_t size = chunk.num_samples;
         if (size == 0) {
             break;

@@ -21,7 +21,6 @@ NS_ASSUME_NONNULL_BEGIN
                                 configPath:(NSString *)modelConfigPath
                               espeakNGData:(NSString *)espeakNGData;
 - (BOOL)completed;
-- (BOOL)readyToRead;
 - (void)cancel;
 
 #pragma mark - Synthesizion
