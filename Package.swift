@@ -44,16 +44,6 @@ let package = Package(
                 dependencies: [
                     .target(name: "piper-objc")
                 ]),
-        .executableTarget(
-            name: "piper-sample",
-            dependencies: [
-                .target(name: "piper-player")
-            ],
-            resources: [
-                .copy("resources/model.onnx"),
-                .copy("resources/model.onnx.json"),
-            ]
-        ),
     ],
     cxxLanguageStandard: .cxx17
 )
