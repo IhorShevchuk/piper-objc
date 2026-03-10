@@ -36,9 +36,6 @@ let package = Package(
                 cxxSettings: [
                     .headerSearchPath("utils")
                 ],
-                linkerSettings: [
-                    .linkedFramework("NaturalLanguage")
-                ]
                ),
         .target(name: "piper-player",
                 dependencies: [
