@@ -34,8 +34,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark SSML
 
-- (void)synthesizeSSML:(NSString *)ssml;
 - (void)synthesizeSSML:(NSString *)ssml
+             speakerId:(int)speakerId;
+- (void)synthesizeSSML:(NSString *)ssml
+             speakerId:(int)speakerId
           toFileAtPath:(NSString *)path
             completion:(dispatch_block_t)completion;
 @end

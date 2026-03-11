@@ -68,10 +68,13 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
     write_number<uint32_t>(unspec_count, stream);
 }
 
-static piper_synthesize_options get_piper_synthesize_options(PiperFragment *fragment, piper_synthesizer *synthesizer)
+static piper_synthesize_options get_piper_synthesize_options(PiperFragment *fragment,
+                                                             piper_synthesizer *synthesizer,
+                                                             int speakerId)
 {
     piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
     options.length_scale = fragment.lengthScale;
+    options.speaker_id = speakerId;
     return options;
 }
 
@@ -93,12 +96,15 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 + (NSString *)ensureEspeakLibDataInstalled
 {
     NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-    NSError *error = nil;
-    [EspeakLib ensureBundleInstalledInRoot:[NSURL fileURLWithPath:documentsPath] error:&error];
-    if (error)
-    {
-        NSLog(@"Error during copying Espeak files: %@", error);
-    }
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSError *error = nil;
+        [EspeakLib ensureBundleInstalledInRoot:[NSURL fileURLWithPath:documentsPath] error:&error];
+        if (error)
+        {
+            NSLog(@"Error during copying Espeak files: %@", error);
+        }
+    });
     return documentsPath;
 }
 
@@ -164,6 +170,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 }
 
 - (void)synthesizeSSML:(NSString *)ssml
+             speakerId:(int)speakerId
 {
     [self addClearBeforeStartingOperation];
     __weak Piper *weakSelf = self;
@@ -176,7 +183,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
         NSArray<PiperFragment *> *fragments = [[strongSelf ssmlParser] parse:ssml];
         for (PiperFragment *fragment in fragments) {
             [strongSelf doSynthesize:fragment.text
-                             options:get_piper_synthesize_options(fragment, synthesizer)
+                             options:get_piper_synthesize_options(fragment, synthesizer, speakerId)
                         onChunkReady:^(piper_audio_chunk chunk) {
                 if (weakSelf == nil) {
                     return;
@@ -211,6 +218,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 }
 
 - (void)synthesizeSSML:(NSString *)ssml
+             speakerId:(int)speakerId
           toFileAtPath:(NSString *)path
             completion:(dispatch_block_t)completion
 {
@@ -230,7 +238,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
             [strongSelf doSynthesize:fragment.text
                         toFileAtPath:path
                                 file:file
-                             options:get_piper_synthesize_options(fragment, synthesizer)];
+                             options:get_piper_synthesize_options(fragment, synthesizer, speakerId)];
         }
         file.close();
     }];
