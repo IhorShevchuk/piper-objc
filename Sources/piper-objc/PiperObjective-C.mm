@@ -16,7 +16,8 @@
 #include <iostream>
 #include <fstream>
 
-#import "PiperSSMLParser.h"
+@import piper_ssml;
+
 #import "NSString+stdStringAddtitons.h"
 
 typedef enum PiperStatus : NSInteger
@@ -68,7 +69,7 @@ static void write_wav_stream_header(std::ostream& stream, int sample_rate) {
     write_number<uint32_t>(unspec_count, stream);
 }
 
-static piper_synthesize_options get_piper_synthesize_options(PiperFragment *fragment,
+static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
                                                              piper_synthesizer *synthesizer,
                                                              int speakerId)
 {
@@ -86,7 +87,7 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
 {
     piper_synthesizer *synthesizer;
     NSOperationQueue *_operationQueue;
-    PiperSSMLParser *_ssmlParser;
+    SSMLParser *_ssmlParser;
 }
 
 @end
@@ -180,8 +181,8 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
         if (strongSelf == nil) {
             return;
         }
-        NSArray<PiperFragment *> *fragments = [[strongSelf ssmlParser] parse:ssml];
-        for (PiperFragment *fragment in fragments) {
+        NSArray<SSMLNode *> *fragments = [[strongSelf ssmlParser] parseWithSsml:ssml];
+        for (SSMLNode *fragment in fragments) {
             [strongSelf doSynthesize:fragment.text
                              options:get_piper_synthesize_options(fragment, synthesizer, speakerId)
                         onChunkReady:^(piper_audio_chunk chunk) {
@@ -232,9 +233,9 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
         }
         std::ofstream file;
         
-        NSArray<PiperFragment *> *fragments = [[strongSelf ssmlParser] parse:ssml];
+        NSArray<SSMLNode *> *fragments = [[strongSelf ssmlParser] parseWithSsml:ssml];
         
-        for (PiperFragment *fragment in fragments) {
+        for (SSMLNode *fragment in fragments) {
             [strongSelf doSynthesize:fragment.text
                         toFileAtPath:path
                                 file:file
@@ -351,14 +352,14 @@ static piper_synthesize_options get_piper_synthesize_options(PiperFragment *frag
     }];
 }
 
-- (PiperSSMLParser *)ssmlParser
+- (SSMLParser *)ssmlParser
 {
     if (_ssmlParser != nil) {
         return _ssmlParser;
     }
     @synchronized(self)
     {
-        _ssmlParser = [PiperSSMLParser new];
+        _ssmlParser = [SSMLParser new];
         return _ssmlParser;
     }
 }

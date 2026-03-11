@@ -30,13 +30,16 @@ let package = Package(
         .target(name: "piper-objc",
                 dependencies: [
                     .product(name: "piper1-gpl", package: "piper1-gpl-spm"),
-                    .product(name: "espeak-ng-data", package: "espeak-ng-spm")
+                    .product(name: "espeak-ng-data", package: "espeak-ng-spm"),
+                    .target(name: "piper-ssml"),
                 ],
                 path: "Sources/piper-objc",
                 cxxSettings: [
-                    .headerSearchPath("utils")
+                    .headerSearchPath("utils"),
+                    .unsafeFlags(["-fmodules", "-fcxx-modules"])
                 ],
                ),
+        .target(name: "piper-ssml"),
         .target(name: "piper-player",
                 dependencies: [
                     .target(name: "piper-objc")
