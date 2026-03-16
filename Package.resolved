@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/IhorShevchuk/espeak-ng-spm.git",
       "state" : {
-        "revision" : "d1a0e917cf23b3f77efa4c9c96549e737cbc0987",
-        "version" : "2025.9.17"
+        "revision" : "dda87cd7efcc832db857c78c7ae68839ba9bb43e",
+        "version" : "2025.10.11"
       }
     },
     {
