@@ -9,24 +9,39 @@ import Foundation
 
 public final class SSMLParser: NSObject {
     
-    var ssmlNodes: [SSMLNode]
-    var currentRate: Float
-
+    // MARK: - Context
+    
+    private struct SSMLContext {
+        var text: String
+        var rate: Float
+    }
+    
+    // MARK: - State
+    
+    private var stack: [SSMLContext] = []
+    private var ssmlNodes: [SSMLNode] = []
+    
     public override init() {
-        currentRate = 1.0
-        ssmlNodes = []
         super.init()
     }
     
+    // MARK: - Public API
+    
     @objc public func parse(ssml: String) -> [SSMLNode] {
         ssmlNodes.removeAll()
+        
         guard let data = ssml.data(using: .utf8) else {
             return []
         }
         
+        stack = [
+            SSMLContext(text: "", rate: 1.0)
+        ]
+        
         let parser = XMLParser(data: data)
         parser.delegate = self
-        if !parser.parse() {
+        
+        guard parser.parse() else {
             return []
         }
         
@@ -34,35 +49,63 @@ public final class SSMLParser: NSObject {
     }
 }
 
+// MARK: - XMLParserDelegate
+
 extension SSMLParser: XMLParserDelegate {
+    
     public func parser(_ parser: XMLParser,
                        didStartElement elementName: String,
                        namespaceURI: String?,
                        qualifiedName qName: String?,
                        attributes attributeDict: [String : String] = [:]) {
-        if elementName == "prosody" {
-            if let rateStr = attributeDict["rate"] {
-                currentRate = parseRate(rateStr)
-            }
+        
+        let parent = stack.last ?? SSMLContext(text: "", rate: 1.0)
+        
+        var newContext = SSMLContext(
+            text: "",
+            rate: parent.rate
+        )
+        
+        if elementName == "prosody",
+           let rateStr = attributeDict["rate"] {
+            newContext.rate = parseRate(rateStr)
         }
+        stack.append(newContext)
     }
     
     public func parser(_ parser: XMLParser, foundCharacters string: String) {
-        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !stack.isEmpty else { return }
+        stack[stack.count - 1].text += string
+    }
+    
+    public func parser(_ parser: XMLParser,
+                       didEndElement elementName: String,
+                       namespaceURI: String?,
+                       qualifiedName qName: String?) {
         
-        if !trimmed.isEmpty {
-            let node = SSMLNode(text: trimmed, lengthScale: currentRate)
-            ssmlNodes.append(node)
+        guard !stack.isEmpty else { return }
+        
+        let context = stack.removeLast()
+        let normalized = context.text.precomposedStringWithCanonicalMapping
+        if normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return
+        }
+        
+        let node = SSMLNode(
+            text: normalized,
+            lengthScale: context.rate
+        )
+        
+        ssmlNodes.append(node)
+        if !stack.isEmpty {
+            stack[stack.count - 1].text += normalized
         }
     }
-    
-    public func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
-        if elementName == "prosody" {
-            currentRate = 1.0 
-        }
-    }
-    
-    // MARK Helper
+}
+
+// MARK: - Helpers
+
+private extension SSMLParser {
     
     func parseRate(_ value: String) -> Float {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
