@@ -42,8 +42,10 @@ public final class SSMLParser: NSObject {
         parser.delegate = self
         
         guard parser.parse() else {
-            return []
+            return [SSMLNode(text: ssml, lengthScale: 1.0)]
         }
+
+        flushCurrentText()
         
         return ssmlNodes
     }
@@ -59,6 +61,8 @@ extension SSMLParser: XMLParserDelegate {
                        qualifiedName qName: String?,
                        attributes attributeDict: [String : String] = [:]) {
         
+        flushCurrentText()
+
         let parent = stack.last ?? SSMLContext(text: "", rate: 1.0)
         
         var newContext = SSMLContext(
@@ -83,22 +87,10 @@ extension SSMLParser: XMLParserDelegate {
                        namespaceURI: String?,
                        qualifiedName qName: String?) {
         
-        guard !stack.isEmpty else { return }
+        flushCurrentText()
         
-        let context = stack.removeLast()
-        let normalized = context.text.precomposedStringWithCanonicalMapping
-        if normalized.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return
-        }
-        
-        let node = SSMLNode(
-            text: normalized,
-            lengthScale: context.rate
-        )
-        
-        ssmlNodes.append(node)
-        if !stack.isEmpty {
-            stack[stack.count - 1].text += normalized
+        if stack.count > 1 {
+            stack.removeLast()
         }
     }
 }
@@ -106,6 +98,26 @@ extension SSMLParser: XMLParserDelegate {
 // MARK: - Helpers
 
 private extension SSMLParser {
+    
+    func flushCurrentText() {
+        guard !stack.isEmpty else { return }
+        
+        var text = stack[stack.count - 1].text
+        
+        text = text.precomposedStringWithCanonicalMapping
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            stack[stack.count - 1].text = ""
+            return
+        }
+        
+        let node = SSMLNode(
+            text: text,
+            lengthScale: stack[stack.count - 1].rate
+        )
+        
+        ssmlNodes.append(node)
+        stack[stack.count - 1].text = ""
+    }
     
     func parseRate(_ value: String) -> Float {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
