@@ -74,7 +74,14 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
                                                              int speakerId)
 {
     piper_synthesize_options options = piper_default_synthesize_options(synthesizer);
-    options.length_scale = fragment.lengthScale;
+    float speed = fragment.lengthScale;
+    float lengthScale;
+    if (speed > 0.0f) {
+        lengthScale = 1.0f / speed;
+    } else {
+        lengthScale = 1.0f;
+    }
+    options.length_scale = fmaxf(0.10f, fminf(lengthScale, 10.0f));
     options.speaker_id = speakerId;
     return options;
 }
