@@ -21,7 +21,9 @@ jobs:
         with:
           clean: true
           submodules: recursive
+      - name: Test
+        run: |
+          swift test
       - name: Build
         run: |
-          rm -fr .build | echo "Removed build folder"
           swift build -c release
