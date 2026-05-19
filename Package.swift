@@ -31,7 +31,7 @@ let package = Package(
                 dependencies: [
                     .product(name: "piper1-gpl", package: "piper1-gpl-spm"),
                     .product(name: "espeak-ng-data", package: "espeak-ng-spm"),
-                    .target(name: "piper-ssml"),
+                    .target(name: "piper-utils"),
                 ],
                 path: "Sources/piper-objc",
                 cxxSettings: [
@@ -39,14 +39,14 @@ let package = Package(
                     .unsafeFlags(["-fmodules", "-fcxx-modules"])
                 ],
                ),
-        .target(name: "piper-ssml"),
+        .target(name: "piper-utils"),
         .target(name: "piper-player",
                 dependencies: [
                     .target(name: "piper-objc")
                 ]),
         .testTarget(name: "piper-objc-tests",
                    dependencies: [
-                    .target(name: "piper-ssml")
+                    .target(name: "piper-utils")
                    ])
     ],
     cxxLanguageStandard: .cxx17

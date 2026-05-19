@@ -1,5 +1,5 @@
 import Testing
-@testable import piper_ssml
+@testable import piper_utils
 
 @Suite("SSMLParser Tests")
 struct SSMLParserTests {

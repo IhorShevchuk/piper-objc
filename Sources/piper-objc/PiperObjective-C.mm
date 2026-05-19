@@ -16,7 +16,7 @@
 #include <iostream>
 #include <fstream>
 
-@import piper_ssml;
+@import piper_utils;
 
 #import "NSString+stdStringAddtitons.h"
 
@@ -137,14 +137,12 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
         {
             espeakNGDataInternal = [Piper ensureEspeakLibDataInstalled];
         }
+
         synthesizer = piper_create(
                                    StringFromNSString(model).c_str(),
                                    StringFromNSString(modelConfig).c_str(),
                                    StringFromNSString(espeakNGDataInternal).c_str()
                                    );
-        if (synthesizer == nullptr) {
-            return nil;
-        }
         self.status = PiperStatusCreated;
     }
     return self;
@@ -288,17 +286,29 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
              options:(piper_synthesize_options)options
         onChunkReady:(PiperAudioChunkReady)audioChunkReady
 {
-    piper_synthesize_start(synthesizer,
-                           StringFromNSString(text).c_str(),
-                           &options /* NULL for defaults */);
-    piper_audio_chunk chunk;
-    while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE && self.status != PiperStatusCanceled) {
-        const size_t size = chunk.num_samples;
-        if (size == 0) {
-            break;
+    if (audioChunkReady == NULL) {
+        self.status = PiperStatusError;
+        return;
+    }
+    
+    NSArray<NSString *> *sentences = [PiperSentencesExtractor extractFrom:text];
+    for (NSString* sentence in sentences) {
+        if (synthesizer == nullptr) {
+            self.status = PiperStatusError;
+            return;
         }
-        if (audioChunkReady) {
-            audioChunkReady(chunk);
+        piper_synthesize_start(synthesizer,
+                               StringFromNSString(sentence).c_str(),
+                               &options /* NULL for defaults */);
+        piper_audio_chunk chunk;
+        while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE && self.status != PiperStatusCanceled) {
+            const size_t size = chunk.num_samples;
+            if (size == 0) {
+                break;
+            }
+            if (audioChunkReady) {
+                audioChunkReady(chunk);
+            }
         }
     }
 }
