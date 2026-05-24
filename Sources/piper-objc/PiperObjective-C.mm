@@ -254,8 +254,9 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
 
 - (void)cancel
 {
-    [self.operationQueue cancelAllOperations];
     self.status = PiperStatusCanceled;
+    [self.operationQueue cancelAllOperations];
+    [self.operationQueue waitUntilAllOperationsAreFinished];
 }
 
 - (BOOL)completed
@@ -297,11 +298,19 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
             self.status = PiperStatusError;
             return;
         }
+        
+        if (self.status != PiperStatusRendering) {
+            return;
+        }
+        
         piper_synthesize_start(synthesizer,
                                StringFromNSString(sentence).c_str(),
                                &options /* NULL for defaults */);
         piper_audio_chunk chunk;
-        while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE && self.status != PiperStatusCanceled) {
+        while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+            if (self.status != PiperStatusRendering) {
+                return;
+            }
             const size_t size = chunk.num_samples;
             if (size == 0) {
                 break;
@@ -352,6 +361,7 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
 
 - (void)addClearBeforeStartingOperation
 {
+    [self cancel];
     __weak Piper *weakSelf = self;
     [self.operationQueue addOperationWithBlock:^{
         weakSelf.status = PiperStatusRendering;
