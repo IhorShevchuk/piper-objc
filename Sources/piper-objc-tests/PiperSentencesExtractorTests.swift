@@ -315,4 +315,17 @@ struct PiperSentencesExtractorTests {
         #expect(result[1].contains("Hello world"))
         #expect(result[0].contains("😊") || result[1].contains("🌍"))
     }
+
+    @Test
+    func preventsStackOverflowOnPathologicalInput() {
+        let word = "word"
+        let text = Array(repeating: word, count: 10000).joined(separator: " ")
+        let result = PiperSentencesExtractor.extract(from: text)
+        #expect(!result.isEmpty)
+        for chunk in result {
+            let words = chunk.split(whereSeparator: \.isWhitespace)
+            #expect(words.count <= 22)
+            #expect(chunk.count <= 160)
+        }
+    }
 }

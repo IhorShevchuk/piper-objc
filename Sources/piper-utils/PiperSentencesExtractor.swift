@@ -14,6 +14,7 @@ public final class PiperSentencesExtractor: NSObject {
     private enum Constants {
         static let maxWordsPerChunk = 22
         static let maxCharactersPerChunk = 160
+        static let maxRecursionDepth = 20
         
         /// Hard sentence boundary punctuation (always respected)
         static let sentenceEndPunctuation: CharacterSet = CharacterSet(charactersIn: ".!?")
@@ -50,7 +51,7 @@ public final class PiperSentencesExtractor: NSObject {
         
         var finalChunks: [String] = []
         for sentence in rawSentences {
-            let chunks = processSentence(sentence)
+            let chunks = processSentence(sentence, recursionDepth: 0)
             finalChunks.append(contentsOf: chunks)
         }
         
@@ -58,9 +59,13 @@ public final class PiperSentencesExtractor: NSObject {
     }
     
     // MARK: - Sentence Processing (Recursive Breakdown)
-    private static func processSentence(_ sentence: String) -> [String] {
+    private static func processSentence(_ sentence: String, recursionDepth: Int = 0) -> [String] {
         let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
+        
+        if recursionDepth > Constants.maxRecursionDepth {
+            return [trimmed]
+        }
         
         // Base Case: If the text is small enough, stop splitting
         if isValidChunk(trimmed) {
@@ -73,11 +78,11 @@ public final class PiperSentencesExtractor: NSObject {
             let rightSide = String(trimmed[splitIndex...])
             
             // Recursively evaluate both halves
-            return processSentence(leftSide) + processSentence(rightSide)
+            return processSentence(leftSide, recursionDepth: recursionDepth + 1) + processSentence(rightSide, recursionDepth: recursionDepth + 1)
         }
         
         // Fallback: If no soft punctuation exists but it's still too long, split by middle word
-        return forceSplitByMiddleWord(trimmed)
+        return forceSplitByMiddleWord(trimmed, recursionDepth: recursionDepth + 1)
     }
     
     // MARK: - Core Subdivision Logic
@@ -108,7 +113,7 @@ public final class PiperSentencesExtractor: NSObject {
         return bestIndex
     }
     
-    private static func forceSplitByMiddleWord(_ text: String) -> [String] {
+    private static func forceSplitByMiddleWord(_ text: String, recursionDepth: Int) -> [String] {
         let words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
         guard words.count > 1 else { return [text] }
         
@@ -116,7 +121,7 @@ public final class PiperSentencesExtractor: NSObject {
         let leftSide = words[..<midIndex].joined(separator: " ")
         let rightSide = words[midIndex...].joined(separator: " ")
         
-        return processSentence(leftSide) + processSentence(rightSide)
+        return processSentence(leftSide, recursionDepth: recursionDepth) + processSentence(rightSide, recursionDepth: recursionDepth)
     }
     
     // MARK: - Validation & Helpers
