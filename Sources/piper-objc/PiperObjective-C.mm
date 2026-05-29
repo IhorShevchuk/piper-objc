@@ -6,6 +6,8 @@
 //
 
 #import "PiperObjective-C.h"
+#include <cstdio>
+#include <Foundation/NSObjCRuntime.h>
 #include <Foundation/Foundation.h>
 
 #import <espeak-ng/bundle.h>
@@ -144,6 +146,10 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
                                    CStringFromNSString(modelConfig),
                                    CStringFromNSString(espeakNGDataInternal)
                                    );
+        if (synthesizer == nullptr)
+        {
+            return nil;
+        }
         self.status = PiperStatusCreated;
     }
     return self;
@@ -152,7 +158,9 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
 - (void)dealloc
 {
     [self cancel];
-    piper_free(synthesizer);
+    if (synthesizer != nullptr) {
+        piper_free(synthesizer);
+    }
 }
 
 - (void)synthesize:(NSString *)text

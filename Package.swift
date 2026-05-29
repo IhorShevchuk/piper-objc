@@ -46,7 +46,8 @@ let package = Package(
                 ]),
         .testTarget(name: "piper-objc-tests",
                    dependencies: [
-                    .target(name: "piper-utils")
+                    .target(name: "piper-utils"),
+                    .target(name: "piper-objc")
                    ])
     ],
     cxxLanguageStandard: .cxx17

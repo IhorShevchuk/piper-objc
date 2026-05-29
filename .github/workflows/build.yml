@@ -23,7 +23,7 @@ jobs:
           submodules: recursive
       - name: Test
         run: |
-          swift test
+          swift test -Xcc -DPATH_ESPEAK_DATA="\"\""
       - name: Build
         run: |
           swift build -c release
