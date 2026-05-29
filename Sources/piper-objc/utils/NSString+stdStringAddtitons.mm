@@ -34,3 +34,8 @@ std::string StringFromNSString(NSString * _Nullable nsString)
     return utfString;
 }
 
+const char * _Nonnull CStringFromNSString(NSString * _Nullable nsString)
+{
+    const char *utfString = nsString.UTF8String;
+    return (utfString != NULL) ? utfString : "";
+}

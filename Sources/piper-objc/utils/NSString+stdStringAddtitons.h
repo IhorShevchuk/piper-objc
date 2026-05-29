@@ -13,5 +13,6 @@
 
 NSString *_Nullable NSSringFromString(const std::string &string);
 std::string StringFromNSString(NSString * _Nullable nsString);
+const char * _Nonnull CStringFromNSString(NSString * _Nullable nsString);
 
 #endif /* NSString_stdStringAddtitons_h */

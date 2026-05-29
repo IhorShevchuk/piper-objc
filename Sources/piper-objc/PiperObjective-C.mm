@@ -6,6 +6,7 @@
 //
 
 #import "PiperObjective-C.h"
+#include <Foundation/Foundation.h>
 
 #import <espeak-ng/bundle.h>
 
@@ -139,9 +140,9 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
         }
 
         synthesizer = piper_create(
-                                   StringFromNSString(model).c_str(),
-                                   StringFromNSString(modelConfig).c_str(),
-                                   StringFromNSString(espeakNGDataInternal).c_str()
+                                   CStringFromNSString(model),
+                                   CStringFromNSString(modelConfig),
+                                   CStringFromNSString(espeakNGDataInternal)
                                    );
         self.status = PiperStatusCreated;
     }
@@ -188,16 +189,18 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
         }
         NSArray<SSMLNode *> *fragments = [[strongSelf ssmlParser] parseWithSsml:ssml];
         for (SSMLNode *fragment in fragments) {
-            [strongSelf doSynthesize:fragment.text
-                             options:get_piper_synthesize_options(fragment, synthesizer, speakerId)
-                        onChunkReady:^(piper_audio_chunk chunk) {
-                if (weakSelf == nil) {
-                    return;
-                }
-                Piper *strongSelf = weakSelf;
-                [strongSelf.delegate piperDidReceiveSamples:chunk.samples
-                                                   withSize:chunk.num_samples];
-            }];
+            @autoreleasepool {
+                [strongSelf doSynthesize:fragment.text ?: @""
+                                 options:get_piper_synthesize_options(fragment, synthesizer, speakerId)
+                            onChunkReady:^(piper_audio_chunk chunk) {
+                    if (weakSelf == nil) {
+                        return;
+                    }
+                    Piper *strongSelf = weakSelf;
+                    [strongSelf.delegate piperDidReceiveSamples:chunk.samples
+                                                       withSize:chunk.num_samples];
+                }];
+            }
         }
     }];
     
@@ -241,10 +244,12 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
         NSArray<SSMLNode *> *fragments = [[strongSelf ssmlParser] parseWithSsml:ssml];
         
         for (SSMLNode *fragment in fragments) {
-            [strongSelf doSynthesize:fragment.text
-                        toFileAtPath:path
-                                file:file
-                             options:get_piper_synthesize_options(fragment, synthesizer, speakerId)];
+            @autoreleasepool {
+                [strongSelf doSynthesize:fragment.text ?: @""
+                            toFileAtPath:path
+                                    file:file
+                                 options:get_piper_synthesize_options(fragment, synthesizer, speakerId)];
+            }
         }
         file.close();
     }];
@@ -294,28 +299,29 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
     
     NSArray<NSString *> *sentences = [PiperSentencesExtractor extractFrom:text];
     for (NSString* sentence in sentences) {
-        if (synthesizer == nullptr) {
-            self.status = PiperStatusError;
-            return;
-        }
-        
-        if (self.status != PiperStatusRendering) {
-            return;
-        }
-        
-        piper_synthesize_start(synthesizer,
-                               StringFromNSString(sentence).c_str(),
-                               &options /* NULL for defaults */);
-        piper_audio_chunk chunk;
-        while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+        @autoreleasepool {
+            if (synthesizer == nullptr) {
+                self.status = PiperStatusError;
+                return;
+            }
             if (self.status != PiperStatusRendering) {
                 return;
             }
-            const size_t size = chunk.num_samples;
-            if (size == 0) {
-                break;
-            }
-            if (audioChunkReady) {
+
+            piper_synthesize_start(synthesizer,
+                                   CStringFromNSString(sentence),
+                                   &options /* NULL for defaults */);
+
+            piper_audio_chunk chunk;
+            while (piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE) {
+                if (self.status != PiperStatusRendering) {
+                    return;
+                }
+                
+                const size_t size = chunk.num_samples;
+                if (size == 0) {
+                    break;
+                }
                 audioChunkReady(chunk);
             }
         }
@@ -329,12 +335,13 @@ static piper_synthesize_options get_piper_synthesize_options(SSMLNode *fragment,
 {
     std::ofstream::openmode mode = std::ofstream::out | std::ofstream::binary;
     __block bool is_header_writen = false;
+    const char *pathCStr = CStringFromNSString(path);
     
     [self doSynthesize:text
                options:options
           onChunkReady:^(piper_audio_chunk chunk) {
-        if (!is_header_writen && !file.is_open()) {
-            file.open(StringFromNSString(path).c_str(), mode);
+        if (!is_header_writen && !file.is_open() && pathCStr) {
+            file.open(pathCStr, mode);
             write_wav_stream_header(file, chunk.sample_rate);
             is_header_writen = true;
         }
