@@ -8,9 +8,7 @@ struct PiperIntegrationTests {
     init() async throws {
         // Download models once for the entire suite
         Bundle.setupSwizzling()
-        print("[DEBUG] Starting asset download if needed...")
         try await PiperTestAssets.downloadIfNeeded()
-        print("[DEBUG] Model Path: \(PiperTestAssets.modelPath)")
     }
 
     @Test("Piper initializes correctly with downloaded models")

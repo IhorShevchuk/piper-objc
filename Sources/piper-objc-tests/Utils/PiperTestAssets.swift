@@ -33,20 +33,15 @@ extension Bundle {
                 testBundleURL.deletingLastPathComponent(), // Alongside the test bundle
                 testBundleURL.deletingLastPathComponent().deletingLastPathComponent() // One level up
             ]
-            
-            print("[DEBUG] Swizzling searching for \(name ?? "nil").\(ext ?? "nil")")
-            print("[DEBUG] Test Bundle URL: \(testBundleURL.path)")
 
             for searchURL in searchPaths {
                 for candidate in candidates {
                     let bundleURL = searchURL.appendingPathComponent(candidate)
                     if FileManager.default.fileExists(atPath: bundleURL.path) {
-                        print("[DEBUG] Found espeak bundle at: \(bundleURL.path)")
                         return bundleURL
                     }
                 }
             }
-            print("[DEBUG] Failed to find espeak-ng-data bundle in candidates.")
         }
         let originalResult = self.swizzled_url(forResource: name, withExtension: ext)
         return originalResult
