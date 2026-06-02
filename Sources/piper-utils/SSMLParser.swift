@@ -21,13 +21,9 @@ public final class SSMLParser: NSObject {
     private var stack: [SSMLContext] = []
     private var ssmlNodes: [SSMLNode] = []
     
-    public override init() {
-        super.init()
-    }
-    
     // MARK: - Public API
     
-    @objc public func parse(ssml: String) -> [SSMLNode] {
+    public func parse(ssml: String) -> [SSMLNode] {
         ssmlNodes.removeAll()
         
         guard let data = ssml.data(using: .utf8) else {

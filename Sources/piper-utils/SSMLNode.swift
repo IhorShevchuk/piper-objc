@@ -6,12 +6,7 @@
 //
 import Foundation
 
-@objc public class SSMLNode: NSObject {
-    @objc public let text: String
-    @objc public let lengthScale: Float
-    init(text: String, lengthScale: Float) {
-        self.text = text
-        self.lengthScale = lengthScale
-        super.init()
-    }
+public struct SSMLNode {
+    public let text: String
+    public let lengthScale: Float
 }

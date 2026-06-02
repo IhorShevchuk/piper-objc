@@ -8,7 +8,7 @@
 import Foundation
 import NaturalLanguage
 
-public final class PiperSentencesExtractor: NSObject {
+public final class PiperSentencesExtractor {
     
     // MARK: - Configuration
     private enum Constants {
@@ -24,7 +24,7 @@ public final class PiperSentencesExtractor: NSObject {
     }
     
     // MARK: - Public API
-    @objc public static func extract(from text: String) -> [String] {
+    public static func extract(from text: String) -> [String] {
         let cleaned = normalize(text)
         guard !cleaned.isEmpty else { return [] }
         
