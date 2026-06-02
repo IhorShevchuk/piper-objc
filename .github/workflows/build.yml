@@ -23,7 +23,10 @@ jobs:
           submodules: recursive
       - name: Test
         run: |
-          swift test -Xcc -DPATH_ESPEAK_DATA="\"\""
+          xcodebuild test \
+            -scheme "piper-objc-Package" \
+            -destination "platform=macOS" \
+            -only-testing:"piper-objc-tests"
       - name: Build
         run: |
           swift build -c release

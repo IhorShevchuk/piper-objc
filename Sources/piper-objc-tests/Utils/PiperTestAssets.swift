@@ -18,24 +18,33 @@ extension Bundle {
     }
 
     @objc func swizzled_url(forResource name: String?, withExtension ext: String?) -> URL? {
-        if name == "espeak-ng_data" && ext == "bundle" {
+        // The internal Piper code likely searches for "espeak-ng_data" or "espeak-ng-data"
+        if (name == "espeak-ng_data" || name == "espeak-ng-data") && ext == "bundle" {
             // Check common SPM resource bundle naming conventions
             let candidates = [
                 "espeak-ng-spm_espeak-ng-data.bundle",
-                "espeak-ng_data.bundle"
+                "espeak-ng_data.bundle",
+                "piper-objc_espeak-ng-data.bundle"
             ]
             
             let testBundleURL = Bundle(for: PiperTestAssets.self).bundleURL
-            let searchURL = testBundleURL.deletingLastPathComponent()
-            
-            for candidate in candidates {
-                let bundleURL = searchURL.appendingPathComponent(candidate)
-                if FileManager.default.fileExists(atPath: bundleURL.path) {
-                    return bundleURL
+            let searchPaths = [
+                testBundleURL, // Inside the test bundle
+                testBundleURL.deletingLastPathComponent(), // Alongside the test bundle
+                testBundleURL.deletingLastPathComponent().deletingLastPathComponent() // One level up
+            ]
+
+            for searchURL in searchPaths {
+                for candidate in candidates {
+                    let bundleURL = searchURL.appendingPathComponent(candidate)
+                    if FileManager.default.fileExists(atPath: bundleURL.path) {
+                        return bundleURL
+                    }
                 }
             }
         }
-        return self.swizzled_url(forResource: name, withExtension: ext)
+        let originalResult = self.swizzled_url(forResource: name, withExtension: ext)
+        return originalResult
     }
 }
 
