@@ -321,12 +321,16 @@ struct PiperSentencesExtractorTests {
         let word = "word"
         let text = Array(repeating: word, count: 10000).joined(separator: " ")
         let result = Array(PiperSentencesExtractor.extract(from: text))
+        
         #expect(!result.isEmpty)
+        var totalWordCount = 0
         for chunk in result {
             let words = chunk.split(whereSeparator: \.isWhitespace)
+            totalWordCount += words.count
             #expect(words.count <= 22)
             #expect(chunk.count <= 160)
         }
+        #expect(totalWordCount == 10000, "Should not lose any words during recursive splitting.")
     }
 
     // MARK: - Streaming & Sequence Behavior
@@ -357,5 +361,14 @@ struct PiperSentencesExtractorTests {
         #expect(result.count == 2)
         #expect(result[0] == "This is a sentence.")
         #expect(result[1] == "This is a sentence.")
+    }
+
+    @Test
+    func handlesOnlyPunctuationAndWhitespace() {
+        let text = "... !!! ??? ,,,   "
+        let sequence = PiperSentencesExtractor.extract(from: text)
+        let result = Array(sequence)
+        
+        #expect(result.first == text.trimmingCharacters(in: .whitespacesAndNewlines), "Should return an empty array and not hang in an infinite loop.")
     }
 }

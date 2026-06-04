@@ -137,8 +137,8 @@ public class Piper: NSObject {
         
         operationQueue.addOperation { [weak self] in
             guard let self = self else { return }
-            let fragments = self.ssmlParser.parse(ssml: ssml)
-            for fragment in fragments {
+            self.ssmlParser.parse(ssml: ssml) { [weak self] fragment in
+                guard let self = self, self.status == .rendering else { return }
                 autoreleasepool {
                     let options = self.getOptions(for: fragment, speakerId: speakerId)
                     self.doSynthesize(text: fragment.text, options: options) { chunk in
@@ -173,9 +173,8 @@ public class Piper: NSObject {
             defer { try? fileHandle.close() }
 
             var isHeaderWritten = false
-            let fragments = self.ssmlParser.parse(ssml: ssml)
-            
-            for fragment in fragments {
+            self.ssmlParser.parse(ssml: ssml) { [weak self] fragment in
+                guard let self = self, self.status == .rendering else { return }
                 autoreleasepool {
                     let options = self.getOptions(for: fragment, speakerId: speakerId)
                     self.doSynthesize(text: fragment.text, options: options) { chunk in

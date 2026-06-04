@@ -19,15 +19,16 @@ public final class SSMLParser: NSObject {
     // MARK: - State
     
     private var stack: [SSMLContext] = []
-    private var ssmlNodes: [SSMLNode] = []
+    private var onNode: ((SSMLNode) -> Void)?
     
     // MARK: - Public API
     
-    public func parse(ssml: String) -> [SSMLNode] {
-        ssmlNodes.removeAll()
+    public func parse(ssml: String, onNode: @escaping (SSMLNode) -> Void) {
+        self.onNode = onNode
+        defer { self.onNode = nil }
         
         guard let data = ssml.data(using: .utf8) else {
-            return []
+            return
         }
         
         stack = [
@@ -37,13 +38,12 @@ public final class SSMLParser: NSObject {
         let parser = XMLParser(data: data)
         parser.delegate = self
         
-        guard parser.parse() else {
-            return [SSMLNode(text: ssml, lengthScale: 1.0)]
+        if !parser.parse() {
+            onNode(SSMLNode(text: ssml, lengthScale: 1.0))
+            return
         }
 
         flushCurrentText()
-        
-        return ssmlNodes
     }
 }
 
@@ -111,7 +111,7 @@ private extension SSMLParser {
             lengthScale: stack[stack.count - 1].rate
         )
         
-        ssmlNodes.append(node)
+        onNode?(node)
         stack[stack.count - 1].text = ""
     }
     
