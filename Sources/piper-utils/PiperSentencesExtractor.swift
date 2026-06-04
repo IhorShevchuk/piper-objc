@@ -24,38 +24,42 @@ public final class PiperSentencesExtractor {
     }
     
     // MARK: - Public API
-    public static func extract(from text: String) -> [String] {
-        let cleaned = normalize(text)
-        guard !cleaned.isEmpty else { return [] }
-        
-        let language = detectLanguage(for: cleaned)
-        let tokenizer = NLTokenizer(unit: .sentence)
-        tokenizer.string = cleaned
-        
-        if let language {
-            tokenizer.setLanguage(language)
+    public static func extract(from text: String) -> AnySequence<String> {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return AnySequence([])
         }
-        
-        var rawSentences: [String] = []
-        tokenizer.enumerateTokens(in: cleaned.startIndex..<cleaned.endIndex) { range, _ in
-            let sentence = cleaned[range].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !sentence.isEmpty {
-                rawSentences.append(sentence)
+
+        return AnySequence {
+            let language = detectLanguage(for: text)
+            let tokenizer = NLTokenizer(unit: .sentence)
+            tokenizer.string = text
+            if let language { tokenizer.setLanguage(language) }
+
+            var tokenRanges: [Range<String.Index>] = []
+            tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+                tokenRanges.append(range)
+                return true
             }
-            return true
+
+            // If tokenizer fails, fallback to entire text
+            if tokenRanges.isEmpty {
+                tokenRanges.append(text.startIndex..<text.endIndex)
+            }
+
+            var tokenIterator = tokenRanges.makeIterator()
+            var currentChunks: [String] = []
+
+            return AnyIterator<String> {
+                while currentChunks.isEmpty {
+                    guard let nextRange = tokenIterator.next() else { return nil }
+                    let rawSentence = String(text[nextRange])
+                    let normalized = normalize(rawSentence)
+                    if normalized.isEmpty { continue }
+                    currentChunks = processSentence(normalized, recursionDepth: 0)
+                }
+                return currentChunks.removeFirst()
+            }
         }
-        
-        if rawSentences.isEmpty {
-            rawSentences = [cleaned]
-        }
-        
-        var finalChunks: [String] = []
-        for sentence in rawSentences {
-            let chunks = processSentence(sentence, recursionDepth: 0)
-            finalChunks.append(contentsOf: chunks)
-        }
-        
-        return finalChunks
     }
     
     // MARK: - Sentence Processing (Recursive Breakdown)

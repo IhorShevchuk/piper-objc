@@ -16,7 +16,7 @@ struct PiperSentencesExtractorTests {
     func extractsBasicSentences() {
         let text = "Hello world. This is a test! How are you?"
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count == 3)
         #expect(result[0] == "Hello world.")
@@ -28,14 +28,14 @@ struct PiperSentencesExtractorTests {
 
     @Test
     func handlesEmptyInput() {
-        let result = PiperSentencesExtractor.extract(from: "")
+        let result = Array(PiperSentencesExtractor.extract(from: ""))
 
         #expect(result.isEmpty)
     }
 
     @Test
     func handlesWhitespaceInput() {
-        let result = PiperSentencesExtractor.extract(from: "   \n\t   ")
+        let result = Array(PiperSentencesExtractor.extract(from: "   \n\t   "))
 
         #expect(result.isEmpty)
     }
@@ -50,7 +50,7 @@ struct PiperSentencesExtractorTests {
         Yesterday, after finishing up an incredibly long day at work, I slowly walked over to the neighborhood grocery store, purchased a fresh bottle of milk, and quickly drove back to my house.
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count > 1)
         
@@ -66,7 +66,7 @@ struct PiperSentencesExtractorTests {
         This is a very long sentence that should be automatically split into multiple smaller chunks because it exceeds the configured word limit for speech synthesis processing.
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count >= 2)
 
@@ -82,7 +82,7 @@ struct PiperSentencesExtractorTests {
     func splitsVeryLongChunkByCharacterLimit() {
         let text = String(repeating: "superlongword ", count: 30)
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count >= 2)
 
@@ -99,7 +99,7 @@ struct PiperSentencesExtractorTests {
         Привіт світе. Як справи? Сьогодні гарна погода.
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count == 3)
         #expect(result[0] == "Привіт світе.")
@@ -113,7 +113,7 @@ struct PiperSentencesExtractorTests {
         こんにちは世界。今日は元気ですか？これはテストです。
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count >= 2)
     }
@@ -124,7 +124,7 @@ struct PiperSentencesExtractorTests {
         Hello world. Привіт світе. こんにちは。
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count == 3)
         if result.count == 3 {
@@ -145,7 +145,7 @@ struct PiperSentencesExtractorTests {
         This     is     a     test.
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count == 2)
         #expect(result[0] == "Hello world.")
@@ -160,7 +160,7 @@ struct PiperSentencesExtractorTests {
         this is text without punctuation and it should still produce output
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(!result.isEmpty)
     }
@@ -173,7 +173,7 @@ struct PiperSentencesExtractorTests {
         Hello 👋 world 🌍. This is awesome 🚀!
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(result.count == 2)
         #expect(result.first == "Hello 👋 world 🌍.")
         #expect(result.last == "This is awesome 🚀!")
@@ -191,7 +191,7 @@ struct PiperSentencesExtractorTests {
         Third line.
         """
 
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
 
         #expect(result.count == 3)
         if result.count == 3 {
@@ -208,7 +208,7 @@ struct PiperSentencesExtractorTests {
         // Long continuous sentence structure completely lacking punctuation marks
         let text = "This is an extremely massive run on block of words without any punctuation whatsoever that will definitely trigger the fallback middle word division routine because it passes limits"
         
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         
         #expect(result.count >= 2)
         for chunk in result {
@@ -221,7 +221,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func preservesOrderWithMultiplePunctuationsAndSplits() {
         let text = "First sentence, with a comma, and more; second sentence: with colons, then — a dash! Finally? An end."
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         // We expect the output to preserve order, even if splits happen at various punctuation.
         #expect(result.first?.hasPrefix("First sentence") == true)
         #expect(result.last?.hasPrefix("An end") == true)
@@ -237,7 +237,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func preservesOrderWithSoftSplitAtMidpoint() {
         let text = "Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta, Iota, Kappa, Lambda, Mu, Nu, Xi, Omicron, Pi, Rho, Sigma, Tau, Upsilon, Phi, Chi, Psi, Omega."
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         // The first chunk should start with Alpha, the last should end with Omega.
         #expect(result.first?.contains("Alpha") == true)
         #expect(result.last?.contains("Omega.") == true)
@@ -251,7 +251,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func preservesOrderWithEmojisAndUnicode() {
         let text = "😀 Alpha βeta, 🚀 Gamma — Delta 🎉. 🐍 Python is fun! 🌍"
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(result.count >= 2)
         // Check that emojis and Unicode tokens remain in order
         let resultString = result.joined(separator: " ")
@@ -266,7 +266,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func orderPreservedWithWordLimitChunking() {
         let text = (1...50).map { "word\($0)" }.joined(separator: " ")
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         // Must split by word limit, but order should be preserved.
         let reconstructed = result.joined(separator: " ")
         let expected = (1...50).map { "word\($0)" }.joined(separator: " ")
@@ -278,7 +278,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func handlesBasicArabicSentences() {
         let text = "مرحبا بالعالم. كيف حالك؟ هذا اختبار!"
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(result.count == 3)
         #expect(result[0] == "مرحبا بالعالم.")
         #expect(result[1] == "كيف حالك؟")
@@ -288,7 +288,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func handlesBasicHebrewSentences() {
         let text = "שלום עולם. מה שלומך? זה מבחן."
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(result.count == 3)
         #expect(result[0] == "שלום עולם.")
         #expect(result[1] == "מה שלומך?")
@@ -298,7 +298,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func handlesMixedArabicAndEnglish() {
         let text = "مرحبا. Hello. كيف الحال؟ How are you?"
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(result.count == 4)
         #expect(result[0] == "مرحبا.")
         #expect(result[1] == "Hello.")
@@ -309,7 +309,7 @@ struct PiperSentencesExtractorTests {
     @Test
     func handlesRTLEmojisAndLTR() {
         let text = "😊 שלום עולם! Hello world! 🌍"
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(result.count == 3)
         #expect(result[0].contains("שלום עולם"))
         #expect(result[1].contains("Hello world"))
@@ -320,12 +320,42 @@ struct PiperSentencesExtractorTests {
     func preventsStackOverflowOnPathologicalInput() {
         let word = "word"
         let text = Array(repeating: word, count: 10000).joined(separator: " ")
-        let result = PiperSentencesExtractor.extract(from: text)
+        let result = Array(PiperSentencesExtractor.extract(from: text))
         #expect(!result.isEmpty)
         for chunk in result {
             let words = chunk.split(whereSeparator: \.isWhitespace)
             #expect(words.count <= 22)
             #expect(chunk.count <= 160)
         }
+    }
+
+    // MARK: - Streaming & Sequence Behavior
+
+    @Test
+    func verifyManualIteration() {
+        let text = "Sentence one. Sentence two. Sentence three."
+        let sequence = PiperSentencesExtractor.extract(from: text)
+        var iterator = sequence.makeIterator()
+
+        #expect(iterator.next() == "Sentence one.")
+        #expect(iterator.next() == "Sentence two.")
+        #expect(iterator.next() == "Sentence three.")
+        #expect(iterator.next() == nil)
+    }
+
+    @Test
+    func verifyPartialConsumptionDoesNotRequireFullProcessing() {
+        // A large block of text
+        let text = String(repeating: "This is a sentence. ", count: 1000)
+        let sequence = PiperSentencesExtractor.extract(from: text)
+        
+        // We only take the first 2. 
+        // Because it is a Sequence/Iterator, we can stop anytime.
+        let firstTwo = sequence.prefix(2)
+        let result = Array(firstTwo)
+        
+        #expect(result.count == 2)
+        #expect(result[0] == "This is a sentence.")
+        #expect(result[1] == "This is a sentence.")
     }
 }
