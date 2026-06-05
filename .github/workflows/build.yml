@@ -3,9 +3,13 @@ on:
   pull_request:
     branches:
       - 'main'
+    paths:
+      - '**/*.swift'
   push:
     branches:
       - 'main'
+    paths:
+      - '**/*.swift'
 
 permissions:
   contents: read

@@ -21,10 +21,9 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/IhorShevchuk/piper1-gpl-spm.git",
-                 from: "0.1.4"),
+                 from: "0.1.5"),
         .package(url: "https://github.com/IhorShevchuk/espeak-ng-spm.git",
-                     from: "2025.9.17"
-                     )
+                 from: "2025.9.17")
     ],
     targets: [
         .target(name: "piper-objc",

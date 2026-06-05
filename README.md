@@ -1,6 +1,6 @@
 # Piper‑ObjC [![Build](https://github.com/IhorShevchuk/piper-objc/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/IhorShevchuk/piper-objc/actions/workflows/build.yml)
 
-Objective‑C bindings for the [Piper](https://github.com/rhasspy/piper) speech synthesis engine, with a ready‑to‑use Swift player.
+Swift implementation of the [Piper](https://github.com/rhasspy/piper) speech synthesis engine. While the core is now written in Swift, it maintains full compatibility with Objective‑C.
 
 ## Requirements
 
@@ -15,13 +15,13 @@ Objective‑C bindings for the [Piper](https://github.com/rhasspy/piper) speech 
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/IhorShevchuk/piper-objc.git", from: "0.1.0")
+    .package(url: "https://github.com/IhorShevchuk/piper-objc.git", from: "0.2.15")
 ]
 ```
 
 Two library products are available:
 
-- **piper-objc** — Low‑level Objective‑C bindings.
+- **piper-objc** — Core engine and low‑level Swift/Objective‑C API.
 - **piper-player** — High‑level Swift player built on AVFoundation.
 
 ## Usage
