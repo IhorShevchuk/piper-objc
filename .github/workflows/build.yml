@@ -5,11 +5,13 @@ on:
       - 'main'
     paths:
       - '**/*.swift'
+      - '.github/workflows/build.yml'
   push:
     branches:
       - 'main'
     paths:
       - '**/*.swift'
+      - '.github/workflows/build.yml'
 
 permissions:
   contents: read
