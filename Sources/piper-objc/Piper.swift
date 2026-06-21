@@ -246,14 +246,17 @@ public class Piper: NSObject {
 
     private func addClearBeforeStartingOperation() {
         cancel()
-        operationQueue.addOperation { [weak self] in
-            self?.status = .rendering
-        }
+        status = .rendering
     }
 
     private func addMarkAsCompleteOperation(_ completion: (() -> Void)?) {
         operationQueue.addOperation { [weak self] in
-            self?.status = .completed
+            guard let self = self else { return }
+            self.statusLock.lock()
+            if self._status == .rendering {
+                self._status = .completed
+            }
+            self.statusLock.unlock()
             completion?()
         }
     }
