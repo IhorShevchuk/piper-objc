@@ -25,6 +25,19 @@ jobs:
         with:
           clean: true
           submodules: recursive
+      - name: Select Xcode
+        env:
+          XCODE_VERSION: "26.0"
+        run: |
+          APPLICATIONS_FOLDER="/Applications"
+          ls "${APPLICATIONS_FOLDER}/Xcode_*.app"
+          TARGET="${APPLICATIONS_FOLDER}/Xcode_${XCODE_VERSION}.app"
+          if [ -d "$TARGET" ]; then
+            sudo xcode-select -s "$TARGET"
+          fi
+
+          xcode-select -p
+          xcodebuild -version
       - name: Test
         run: |
           xcodebuild test \
