@@ -18,6 +18,11 @@ import libespeak_ng
 @objcMembers
 public class Piper: NSObject {
     private var synthesizer: OpaquePointer?
+    private let modelPath: String
+    private let configPath: String
+    private let espeakData: String
+    public var memoryThresholdBytes: UInt64? = nil
+
     private let operationQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
@@ -55,23 +60,26 @@ public class Piper: NSObject {
         return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
     }
 
-    public init?(modelPath: String, andConfigPath modelConfigPath: String) {
-        let espeakNGData = Piper.ensureEspeakLibDataInstalled()
-        super.init()
-        self.operationQueue.name = "\(type(of: self))Queue"
-        
-        guard let syn = piper_create(modelPath, modelConfigPath, espeakNGData) else {
-            return nil
+    private func recreateSynthesizer() {
+        if let syn = synthesizer {
+            piper_free(syn)
+            synthesizer = nil
         }
-        self.synthesizer = syn
-        self.status = .created
+        synthesizer = piper_create(modelPath, configPath, espeakData)
+    }
+
+    public convenience init?(modelPath: String, andConfigPath modelConfigPath: String) {
+        self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "")
     }
 
     public init?(modelPath: String, configPath: String, espeakNGData: String) {
+        let espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
+        self.modelPath = modelPath
+        self.configPath = configPath
+        self.espeakData = espeakData
         super.init()
         self.operationQueue.name = "\(type(of: self))Queue"
         
-        let espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
         guard let syn = piper_create(modelPath, configPath, espeakData) else {
             return nil
         }
@@ -209,6 +217,12 @@ public class Piper: NSObject {
         
         for sentence in sentences {
             autoreleasepool {
+                if let memoryThresholdBytes,
+                   let memory = MemoryInfo.getMemoryUsage(), 
+                   memory > memoryThresholdBytes {
+                    recreateSynthesizer()
+                }
+
                 guard synthesizer != nil else {
                     status = .error
                     return

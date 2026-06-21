@@ -151,6 +151,34 @@ struct PiperIntegrationTests {
         #expect(piper.completed())
         #expect(delegate.sampleCount == 0, "Should not produce samples for empty whitespace")
     }
+
+    @Test("Piper recreates synthesizer when memory threshold is exceeded")
+    func testMemoryThresholdRecreation() async throws {
+        let piper = Piper(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakNGData: PiperTestAssets.espeakNGDataPath
+        )!
+
+        // Set threshold to 1 byte to guarantee recreation is triggered
+        piper.memoryThresholdBytes = 1
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        // Synthesize multiple sentences to trigger the loop checks
+        piper.synthesize("First sentence. Second sentence.")
+
+        var attempts = 0
+        while !piper.completed() && attempts < 100 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            attempts += 1
+        }
+
+        #expect(piper.completed())
+        #expect(delegate.receivedSamples, "Should still successfully produce audio samples after recreation")
+        #expect(delegate.sampleCount > 0)
+    }
 }
 
 /// A simple delegate for testing synthesis output.
