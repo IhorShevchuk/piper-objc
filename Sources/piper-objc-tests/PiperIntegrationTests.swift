@@ -45,6 +45,28 @@ struct PiperIntegrationTests {
         try? FileManager.default.removeItem(atPath: outputPath)
     }
 
+    @Test("Piper delivers markers to delegate during synthesis")
+    func testMarkerDelegate() async throws {
+        let piper = Piper(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakNGData: PiperTestAssets.espeakNGDataPath
+        )!
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+        let testString = "Hello world. This is a test."
+        piper.synthesize(testString)
+        var attempts = 0
+        while !piper.completed() && attempts < 20 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            attempts += 1
+        }
+        let allMarkers = delegate.allMarkers.flatMap { $0 }
+        #expect(!allMarkers.isEmpty, "Should have received at least one marker")
+        #expect(allMarkers.first?.range.location == 0, "First marker range should start at index 0")
+        #expect(allMarkers.count >= 2, "Should get at least one marker per sentence")
+    }
+
     @Test("Piper synthesizes SSML and notifies delegate")
     func testSSMLSynthesis() async throws {
         let piper = Piper(
@@ -183,9 +205,16 @@ struct PiperIntegrationTests {
 
 /// A simple delegate for testing synthesis output.
 private final class TestPiperDelegate: NSObject, PiperDelegate, @unchecked Sendable {
+    func piperDidGenerateMarkers(_ markers: [piper_objc.PiperSpeechMarker]) {
+        markerLock.lock(); _markers.append(markers); markerLock.unlock()
+    }
+    
     private let lock = NSLock()
     private var _sampleCount = 0
     private var _receivedSamples = false
+
+    private let markerLock = NSLock()
+    private var _markers: [[piper_objc.PiperSpeechMarker]] = []
 
     var sampleCount: Int {
         lock.lock(); defer { lock.unlock() }; return _sampleCount
@@ -197,6 +226,10 @@ private final class TestPiperDelegate: NSObject, PiperDelegate, @unchecked Senda
 
     var totalBytes: Int {
         sampleCount * MemoryLayout<Float>.size
+    }
+
+    var allMarkers: [[piper_objc.PiperSpeechMarker]] {
+        markerLock.lock(); defer { markerLock.unlock() }; return _markers
     }
 
     func piperDidReceiveSamples(_ samples: UnsafePointer<Float>, withSize count: Int) {

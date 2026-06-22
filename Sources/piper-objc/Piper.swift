@@ -5,6 +5,7 @@ import libespeak_ng
 
 @objc public protocol PiperDelegate: AnyObject {
     func piperDidReceiveSamples(_ samples: UnsafePointer<Float>, withSize count: Int)
+    func piperDidGenerateMarkers(_ markers: [PiperSpeechMarker])
 }
 
 @objc public enum PiperStatus: Int {
@@ -215,6 +216,8 @@ public class Piper: NSObject {
         let sentences = PiperSentencesExtractor.extract(from: text)
         var currentOptions = options
         
+        var searchStartIndex = text.startIndex
+        var totalBytesGenerated = 0
         for sentence in sentences {
             autoreleasepool {
                 if let memoryThresholdBytes,
@@ -229,6 +232,19 @@ public class Piper: NSObject {
                 }
                 if status != .rendering { return }
 
+                let nsRange: NSRange
+                if let range = text.range(of: sentence, options: [], range: searchStartIndex..<text.endIndex) {
+                    nsRange = NSRange(range, in: text)
+                    searchStartIndex = range.upperBound
+                } else {
+                    nsRange = NSRange(location: NSNotFound, length: 0)
+                }
+
+                if nsRange.location != NSNotFound {
+                    let marker = PiperSpeechMarker(range: nsRange, byteOffset: totalBytesGenerated)
+                    self.delegate?.piperDidGenerateMarkers([marker])
+                }
+
                 piper_synthesize_start(synthesizer, sentence, &currentOptions)
 
                 var chunk = piper_audio_chunk()
@@ -236,6 +252,8 @@ public class Piper: NSObject {
                     if status != .rendering { return }
                     if chunk.num_samples == 0 { break }
                     onChunkReady(chunk)
+                    let chunkBytes = Int(chunk.num_samples) * 4
+                    totalBytesGenerated += chunkBytes
                 }
             }
         }
