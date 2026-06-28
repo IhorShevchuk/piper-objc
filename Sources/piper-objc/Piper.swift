@@ -23,9 +23,11 @@ public class Piper: NSObject {
     private let configPath: String
     private let espeakData: String
     public var memoryThresholdBytes: UInt64? = nil
+    private var totalSSMLBytesGenerated = 0
 
     private let operationQueue: OperationQueue = {
         let queue = OperationQueue()
+        queue.name = "\(Piper.self).main"
         queue.maxConcurrentOperationCount = 1
         queue.qualityOfService = .userInteractive
         return queue
@@ -101,6 +103,7 @@ public class Piper: NSObject {
 
     public func cancel() {
         status = .canceled
+        totalSSMLBytesGenerated = 0
         operationQueue.cancelAllOperations()
         operationQueue.waitUntilAllOperationsAreFinished()
     }
@@ -113,11 +116,17 @@ public class Piper: NSObject {
         operationQueue.addOperation { [weak self] in
             guard let self = self, let syn = self.synthesizer else { return }
             let options = piper_default_synthesize_options(syn)
-            self.doSynthesize(text: text, options: options) { chunk in
+            // Create a dummy SSMLNode to represent the plain text.
+            // This unifies the synthesis pipeline for marker generation.
+            let ssmlFragment = SSMLNode(text: text, lengthScale: options.length_scale, ssmlRange: NSRange(location: 0, length: text.count))
+            self.doSynthesize(text: text, options: options, ssmlFragment: ssmlFragment, onChunkReady: { chunk in
                 self.delegate?.piperDidReceiveSamples(chunk.samples, withSize: Int(chunk.num_samples))
-            }
+            }, onMarkers: { markers in
+                if !markers.isEmpty {
+                    self.delegate?.piperDidGenerateMarkers(markers)
+                }
+            })
         }
-        
         addMarkAsCompleteOperation(nil)
     }
 
@@ -135,9 +144,16 @@ public class Piper: NSObject {
         operationQueue.addOperation { [weak self] in
             guard let self = self, let syn = self.synthesizer else { return }
             let options = piper_default_synthesize_options(syn)
-            self.doSynthesizeToFile(text: text, path: path, options: options)
+            let pathURL = URL(fileURLWithPath: path)
+            FileManager.default.createFile(atPath: path, contents: nil)
+            guard let fileHandle = try? FileHandle(forWritingTo: pathURL) else { return }
+            defer { try? fileHandle.close() }
+            
+            var isHeaderWritten = false
+            self.doSynthesize(text: text, options: options, ssmlFragment: nil, onChunkReady: { chunk in
+                self.writeWavChunk(to: fileHandle, chunk: chunk, isHeaderWritten: &isHeaderWritten)
+            })
         }
-        
         addMarkAsCompleteOperation(completion)
     }
 
@@ -150,9 +166,13 @@ public class Piper: NSObject {
                 guard let self = self, self.status == .rendering else { return }
                 autoreleasepool {
                     let options = self.getOptions(for: fragment, speakerId: speakerId)
-                    self.doSynthesize(text: fragment.text, options: options) { chunk in
+                    self.doSynthesize(text: fragment.text, options: options, ssmlFragment: fragment, onChunkReady: { chunk in
                         self.delegate?.piperDidReceiveSamples(chunk.samples, withSize: Int(chunk.num_samples))
-                    }
+                    }, onMarkers: { markers in
+                        if !markers.isEmpty {
+                            self.delegate?.piperDidGenerateMarkers(markers)
+                        }
+                    })
                 }
             }
         }
@@ -182,19 +202,8 @@ public class Piper: NSObject {
             defer { try? fileHandle.close() }
 
             var isHeaderWritten = false
-            self.ssmlParser.parse(ssml: ssml) { [weak self] fragment in
-                guard let self = self, self.status == .rendering else { return }
-                autoreleasepool {
-                    let options = self.getOptions(for: fragment, speakerId: speakerId)
-                    self.doSynthesize(text: fragment.text, options: options) { chunk in
-                        if !isHeaderWritten {
-                            try? self.writeWavHeader(to: fileHandle, sampleRate: Int32(chunk.sample_rate))
-                            isHeaderWritten = true
-                        }
-                        let buffer = UnsafeBufferPointer(start: chunk.samples, count: Int(chunk.num_samples))
-                        fileHandle.write(Data(buffer: buffer))
-                    }
-                }
+            self.parseAndSynthesizeSSML(ssml: ssml, speakerId: speakerId) { [weak self] chunk in
+                self?.writeWavChunk(to: fileHandle, chunk: chunk, isHeaderWritten: &isHeaderWritten)
             }
         }
         
@@ -212,12 +221,12 @@ public class Piper: NSObject {
         return options
     }
 
-    private func doSynthesize(text: String, options: piper_synthesize_options, onChunkReady: (piper_audio_chunk) -> Void) {
+    private func doSynthesize(text: String, options: piper_synthesize_options, ssmlFragment: SSMLNode? = nil, onChunkReady: (piper_audio_chunk) -> Void, onMarkers: (([PiperSpeechMarker]) -> Void)? = nil) {
         let sentences = PiperSentencesExtractor.extract(from: text)
         var currentOptions = options
         
         var searchStartIndex = text.startIndex
-        var totalBytesGenerated = 0
+
         for sentence in sentences {
             autoreleasepool {
                 if let memoryThresholdBytes,
@@ -233,47 +242,61 @@ public class Piper: NSObject {
                 if status != .rendering { return }
 
                 let nsRange: NSRange
-                if let range = text.range(of: sentence, options: [], range: searchStartIndex..<text.endIndex) {
-                    nsRange = NSRange(range, in: text)
-                    searchStartIndex = range.upperBound
+                if let ssmlFragment, ssmlFragment.ssmlRange.location != NSNotFound {
+                    if let sentenceRange = text.range(of: sentence, options: [], range: searchStartIndex..<text.endIndex) {
+                        let locationInFragment = text.distance(from: text.startIndex, to: sentenceRange.lowerBound)
+                        let length = text.distance(from: sentenceRange.lowerBound, to: sentenceRange.upperBound)
+                        nsRange = NSRange(location: ssmlFragment.ssmlRange.location + locationInFragment, length: length)
+                        searchStartIndex = sentenceRange.upperBound
+                    } else {
+                        nsRange = NSRange(location: NSNotFound, length: 0)
+                    }
                 } else {
                     nsRange = NSRange(location: NSNotFound, length: 0)
                 }
 
-                if nsRange.location != NSNotFound {
-                    let marker = PiperSpeechMarker(range: nsRange, byteOffset: totalBytesGenerated)
-                    self.delegate?.piperDidGenerateMarkers([marker])
-                }
-
+                let sentenceStartByteOffset = self.totalSSMLBytesGenerated
+                
                 piper_synthesize_start(synthesizer, sentence, &currentOptions)
-
+                
+                var sentenceTotalBytes = 0
                 var chunk = piper_audio_chunk()
                 while piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE {
                     if status != .rendering { return }
                     if chunk.num_samples == 0 { break }
+                    
                     onChunkReady(chunk)
-                    let chunkBytes = Int(chunk.num_samples) * 4
-                    totalBytesGenerated += chunkBytes
+                    
+                    let chunkBytes = Int(chunk.num_samples) * MemoryLayout<Float>.size
+                    sentenceTotalBytes += chunkBytes
+                }
+                self.totalSSMLBytesGenerated += sentenceTotalBytes
+                
+                if nsRange.location != NSNotFound, let onMarkers {
+                    let markers = PiperSpeechMarker.generateMarkers(for: sentence, sentenceNSRange: nsRange, startByteOffset: sentenceStartByteOffset, totalBytes: sentenceTotalBytes)
+                    onMarkers(markers)
                 }
             }
         }
     }
 
-    private func doSynthesizeToFile(text: String, path: String, options: piper_synthesize_options) {
-        let pathURL = URL(fileURLWithPath: path)
-        FileManager.default.createFile(atPath: path, contents: nil)
-        guard let fileHandle = try? FileHandle(forWritingTo: pathURL) else { return }
-        defer { try? fileHandle.close() }
-        
-        var isHeaderWritten = false
-        doSynthesize(text: text, options: options) { chunk in
-            if !isHeaderWritten {
-                try? self.writeWavHeader(to: fileHandle, sampleRate: Int32(chunk.sample_rate))
-                isHeaderWritten = true
+    private func parseAndSynthesizeSSML(ssml: String, speakerId: Int32, onChunkReady: @escaping (piper_audio_chunk) -> Void) {
+        self.ssmlParser.parse(ssml: ssml) { [weak self] fragment in
+            guard let self = self, self.status == .rendering else { return }
+            autoreleasepool {
+                let options = self.getOptions(for: fragment, speakerId: speakerId)
+                self.doSynthesize(text: fragment.text, options: options, ssmlFragment: fragment, onChunkReady: onChunkReady)
             }
-            let buffer = UnsafeBufferPointer(start: chunk.samples, count: Int(chunk.num_samples))
-            fileHandle.write(Data(buffer: buffer))
         }
+    }
+    
+    private func writeWavChunk(to fileHandle: FileHandle, chunk: piper_audio_chunk, isHeaderWritten: inout Bool) {
+        if !isHeaderWritten {
+            try? self.writeWavHeader(to: fileHandle, sampleRate: Int32(chunk.sample_rate))
+            isHeaderWritten = true
+        }
+        let buffer = UnsafeBufferPointer(start: chunk.samples, count: Int(chunk.num_samples))
+        fileHandle.write(Data(buffer: buffer))
     }
 
     private func addClearBeforeStartingOperation() {

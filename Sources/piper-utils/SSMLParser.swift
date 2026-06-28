@@ -20,6 +20,8 @@ public final class SSMLParser: NSObject {
     
     private var stack: [SSMLContext] = []
     private var onNode: ((SSMLNode) -> Void)?
+    private var ssmlSource: String = ""
+    private var ssmlCurrentLocation: String.Index!
     
     // MARK: - Public API
     
@@ -31,6 +33,9 @@ public final class SSMLParser: NSObject {
             return
         }
         
+        ssmlSource = ssml
+        ssmlCurrentLocation = ssmlSource.startIndex
+        
         stack = [
             SSMLContext(text: "", rate: 1.0)
         ]
@@ -39,7 +44,7 @@ public final class SSMLParser: NSObject {
         parser.delegate = self
         
         if !parser.parse() {
-            onNode(SSMLNode(text: ssml, lengthScale: 1.0))
+            onNode(SSMLNode(text: ssml, lengthScale: 1.0, ssmlRange: NSRange(location: 0, length: ssml.utf16.count)))
             return
         }
 
@@ -106,9 +111,19 @@ private extension SSMLParser {
             return
         }
         
+        var nsRange = NSRange(location: 0, length: 0)
+        
+        if let range = ssmlSource.range(of: text, options: [], range: ssmlCurrentLocation..<ssmlSource.endIndex) {
+            let location = ssmlSource.distance(from: ssmlSource.startIndex, to: range.lowerBound)
+            let length = ssmlSource.distance(from: range.lowerBound, to: range.upperBound)
+            nsRange = NSRange(location: location, length: length)
+            ssmlCurrentLocation = range.upperBound
+        }
+        
         let node = SSMLNode(
             text: text,
-            lengthScale: stack[stack.count - 1].rate
+            lengthScale: stack[stack.count - 1].rate,
+            ssmlRange: nsRange
         )
         
         onNode?(node)

@@ -64,7 +64,71 @@ struct PiperIntegrationTests {
         let allMarkers = delegate.allMarkers.flatMap { $0 }
         #expect(!allMarkers.isEmpty, "Should have received at least one marker")
         #expect(allMarkers.first?.range.location == 0, "First marker range should start at index 0")
-        #expect(allMarkers.count >= 2, "Should get at least one marker per sentence")
+        #expect(allMarkers.filter({ $0.type == .sentence }).count >= 2, "Should get at least one marker per sentence")
+    }
+
+    @Test("Plain text synthesis generates sentence and word markers")
+    func testWordAndSentenceMarkers() async throws {
+        let piper = Piper(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakNGData: PiperTestAssets.espeakNGDataPath
+        )!
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+        let testString = "This is a test."
+
+        piper.synthesize(testString)
+
+        var attempts = 0
+        while !piper.completed() && attempts < 50 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            attempts += 1
+        }
+
+        let allMarkers = delegate.allMarkers.flatMap { $0 }
+        
+        #expect(allMarkers.count == 5, "Expected 1 sentence + 4 word markers, but got \(allMarkers.count)")
+
+        let sentenceMarker = allMarkers.first { $0.type == .sentence }
+        let wordMarkers = allMarkers.filter { $0.type == .word }
+
+        #expect(sentenceMarker != nil, "Should have one sentence marker")
+        #expect(wordMarkers.count == 4, "Should have four word markers")
+        #expect(sentenceMarker?.range == NSRange(location: 0, length: 15))
+        #expect(wordMarkers.map { $0.range } == [NSRange(location: 0, length: 4), NSRange(location: 5, length: 2), NSRange(location: 8, length: 1), NSRange(location: 10, length: 5)])
+    }
+
+    @Test("SSML synthesis generates correct sentence and word markers")
+    func testSSMLWordAndSentenceMarkers() async throws {
+        let piper = Piper(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakNGData: PiperTestAssets.espeakNGDataPath
+        )!
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+        // The text inside the tags is "This is a test."
+        let ssmlString = "<speak>This is a test.</speak>"
+
+        piper.synthesizeSSML(ssmlString, speakerId: 0)
+
+        var attempts = 0
+        while !piper.completed() && attempts < 50 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            attempts += 1
+        }
+
+        let allMarkers = delegate.allMarkers.flatMap { $0 }
+        
+        #expect(allMarkers.count == 5, "Expected 1 sentence + 4 word markers, but got \(allMarkers.count)")
+
+        let sentenceMarker = allMarkers.first { $0.type == .sentence }
+        let wordMarkers = allMarkers.filter { $0.type == .word }.sorted { $0.range.location < $1.range.location }
+
+        #expect(sentenceMarker?.range == NSRange(location: 7, length: 15), "Sentence range should be relative to the full SSML string")
+        let expectedWordRanges = [NSRange(location: 7, length: 4), NSRange(location: 12, length: 2), NSRange(location: 15, length: 1), NSRange(location: 17, length: 5)]
+        #expect(wordMarkers.map { $0.range } == expectedWordRanges, "Word ranges should be relative to the full SSML string")
     }
 
     @Test("Piper synthesizes SSML and notifies delegate")
