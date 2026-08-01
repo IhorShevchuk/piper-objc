@@ -261,11 +261,19 @@ public class Piper: NSObject {
 
                 let sentenceStartByteOffset = self.totalSSMLBytesGenerated
                 
-                piper_synthesize_start(synthesizer, sentence, &currentOptions)
+                if piper_synthesize_start(synthesizer, sentence, &currentOptions) == PIPER_ERR_GENERIC {
+                    status = .error
+                    return
+                }
                 
                 var sentenceTotalBytes = 0
                 var chunk = piper_audio_chunk()
-                while piper_synthesize_next(synthesizer, &chunk) != PIPER_DONE {
+                var piperStatus = PIPER_OK
+                repeat {
+                    piperStatus = piper_synthesize_next(synthesizer, &chunk)
+                    if piperStatus == PIPER_ERR_GENERIC {
+                        status = .error
+                    }
                     if status != .rendering { return }
                     if chunk.num_samples == 0 { break }
                     
@@ -273,7 +281,8 @@ public class Piper: NSObject {
                     
                     let chunkBytes = Int(chunk.num_samples) * MemoryLayout<Float>.size
                     sentenceTotalBytes += chunkBytes
-                }
+                } while piperStatus == PIPER_OK
+                
                 self.totalSSMLBytesGenerated += sentenceTotalBytes
                 
                 if nsRange.location != NSNotFound, let onMarkers {
