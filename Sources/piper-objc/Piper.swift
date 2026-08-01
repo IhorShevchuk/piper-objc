@@ -209,6 +209,10 @@ public class Piper: NSObject {
         
         addMarkAsCompleteOperation(completion)
     }
+    
+    public static var piperVersion: String? {
+        return piper_version().map { String(cString: $0) }
+    }
 
     // MARK: - Private
 
