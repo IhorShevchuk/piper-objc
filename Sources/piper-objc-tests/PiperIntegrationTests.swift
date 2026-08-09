@@ -1,6 +1,22 @@
 import Testing
 import Foundation
-import piper_objc
+@testable import piper_objc
+import piper_utils
+
+/// A mockable version of Piper that allows us to control memory reporting and observe recreations.
+private final class MockPiper: Piper {
+    var memoryToReport: UInt64? = nil
+    private(set) var recreationCount = 0
+    override func getMemoryUsage() -> UInt64? { 
+        if let memoryToReport = memoryToReport {
+            return memoryToReport
+        }
+        return MemoryInfo.getMemoryUsage() 
+    }
+    override func recreateSynthesizer() { 
+        recreationCount += 1; super.recreateSynthesizer() 
+    }
+}
 
 @Suite("Piper Integration Tests", .serialized)
 struct PiperIntegrationTests {
@@ -11,6 +27,14 @@ struct PiperIntegrationTests {
         try await PiperTestAssets.downloadIfNeeded()
     }
 
+    /// Creates a mock Piper instance for testing.
+    private func makeMockPiper() -> MockPiper? {
+        return MockPiper(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakNGData: PiperTestAssets.espeakNGDataPath
+        )
+    }
     @Test("Piper initializes correctly with downloaded models")
     func testPiperInitialization() {
         let piper = Piper(
@@ -264,6 +288,146 @@ struct PiperIntegrationTests {
         #expect(piper.completed())
         #expect(delegate.receivedSamples, "Should still successfully produce audio samples after recreation")
         #expect(delegate.sampleCount > 0)
+    }
+
+    @Test("Memory threshold contains real memory footprint below a ceiling")
+    func testMemoryThresholdContainsFootprint() async throws {
+        // This test verifies that setting a memory threshold effectively caps
+        // the application's memory footprint below a specified ceiling.
+
+        let longText = String(repeating: "This is a test sentence to generate audio and consume memory. ", count: 50)
+        let delegate = TestPiperDelegate()
+
+        // Define a memory ceiling for the test.
+        let memoryLimitBytes: UInt64 = 300 * 1024 * 1024 // 300 MB
+        let memoryToleranceBytes: UInt64 = 50 * 1024 * 1024 // 50 MB
+
+
+        // --- Run the test with the memory threshold enabled ---
+        let piper = MockPiper(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakNGData: PiperTestAssets.espeakNGDataPath
+        )!
+        piper.delegate = delegate
+        piper.memoryThresholdBytes = memoryLimitBytes
+
+        piper.synthesize(longText)
+        while !piper.completed() { try await Task.sleep(nanoseconds: 10_000_000) }
+
+        guard let finalMemory = MemoryInfo.getMemoryUsage() else {
+            #expect(Bool(false), "Could not get final memory usage.")
+            return
+        }
+
+        // --- Verification ---
+        #expect(finalMemory <= memoryLimitBytes + memoryToleranceBytes, "Final memory (\(finalMemory / 1024 / 1024)MB) should not exceed the limit (\(memoryLimitBytes / 1024 / 1024)MB).")
+        #expect(piper.recreationCount > 0, "Piper must be recreated at least a few times")
+    }
+
+    // MARK: - Memory Management Tests
+
+    @Test("Threshold Not Set: Synthesizer is NOT recreated even with high memory")
+    func testThresholdNotSet() async throws {
+        guard let piper = makeMockPiper() else {
+            #expect(Bool(false), "Failed to initialize MockPiper")
+            return
+        }
+
+        // Set a high mock memory usage
+        piper.memoryToReport = 1_000_000_000 // 1 GB
+        // Ensure memoryThresholdBytes is nil (default)
+        piper.memoryThresholdBytes = nil
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        piper.synthesize("This is a test.")
+        while !piper.completed() { try await Task.sleep(nanoseconds: 100_000_000) }
+
+        #expect(piper.recreationCount == 0, "Synthesizer should not be recreated when threshold is not set.")
+        #expect(delegate.sampleCount > 0, "Synthesis should complete successfully.")
+    }
+
+    @Test("Threshold Not Exceeded: Synthesizer is NOT recreated")
+    func testThresholdNotExceeded() async throws {
+        guard let piper = makeMockPiper() else {
+            #expect(Bool(false), "Failed to initialize MockPiper")
+            return
+        }
+
+        piper.memoryToReport = 500 // 500 bytes of memory usage
+        piper.memoryThresholdBytes = 1000 // Threshold is 1000 bytes
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        piper.synthesize("This is a test.")
+        while !piper.completed() { try await Task.sleep(nanoseconds: 100_000_000) }
+
+        #expect(piper.recreationCount == 0, "Synthesizer should not be recreated when memory is below threshold.")
+        #expect(delegate.sampleCount > 0, "Synthesis should complete successfully.")
+    }
+
+    @Test("Threshold Exceeded: Synthesizer IS recreated")
+    func testThresholdExceeded() async throws {
+        guard let piper = makeMockPiper() else {
+            #expect(Bool(false), "Failed to initialize MockPiper")
+            return
+        }
+
+        piper.memoryToReport = 1001 // 1001 bytes of memory usage
+        piper.memoryThresholdBytes = 1000 // Threshold is 1000 bytes
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        piper.synthesize("This is a test.")
+        while !piper.completed() { try await Task.sleep(nanoseconds: 100_000_000) }
+
+        #expect(piper.recreationCount == 1, "Synthesizer should be recreated once when memory exceeds threshold.")
+        #expect(delegate.sampleCount > 0, "Synthesis should complete successfully after recreation.")
+    }
+
+    @Test("Threshold Exactly Met: Synthesizer is NOT recreated")
+    func testThresholdExactlyMet() async throws {
+        guard let piper = makeMockPiper() else {
+            #expect(Bool(false), "Failed to initialize MockPiper")
+            return
+        }
+
+        piper.memoryToReport = 1000 // Exactly 1000 bytes
+        piper.memoryThresholdBytes = 1000 // Threshold is 1000 bytes
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        piper.synthesize("This is a test.")
+        while !piper.completed() { try await Task.sleep(nanoseconds: 100_000_000) }
+
+        #expect(piper.recreationCount == 0, "Synthesizer should not be recreated when memory exactly meets threshold (uses >).")
+        #expect(delegate.sampleCount > 0, "Synthesis should complete successfully.")
+    }
+
+    @Test("Zero Threshold: Synthesizer is recreated for each sentence")
+    func testZeroThreshold() async throws {
+        guard let piper = makeMockPiper() else {
+            #expect(Bool(false), "Failed to initialize MockPiper")
+            return
+        }
+
+        piper.memoryToReport = 1 // Report minimal memory usage
+        piper.memoryThresholdBytes = 0 // Threshold is 0, so it will always be exceeded
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        let text = "First sentence. Second sentence. Third sentence."
+        piper.synthesize(text)
+        while !piper.completed() { try await Task.sleep(nanoseconds: 100_000_000) }
+
+        #expect(piper.recreationCount == 3, "Synthesizer should be recreated for each of the 3 sentences.")
+        #expect(delegate.sampleCount > 0, "Synthesis should complete successfully despite multiple recreations.")
     }
 }
 

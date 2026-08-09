@@ -45,7 +45,8 @@ jobs:
           xcodebuild test \
             -scheme "piper-objc-Package" \
             -destination "platform=macOS" \
-            -only-testing:"piper-objc-tests"
+            -only-testing:"piper-objc-tests" \
+            -disable-concurrent-destination-testing
       - name: Build
         run: |
           swift build -c release

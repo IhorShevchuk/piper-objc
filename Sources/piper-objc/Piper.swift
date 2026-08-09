@@ -63,7 +63,7 @@ public class Piper: NSObject {
         return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
     }
 
-    private func recreateSynthesizer() {
+    func recreateSynthesizer() {
         if let syn = synthesizer {
             piper_free(syn)
             synthesizer = nil
@@ -94,6 +94,7 @@ public class Piper: NSObject {
         cancel()
         if let syn = synthesizer {
             piper_free(syn)
+            synthesizer = nil
         }
     }
 
@@ -216,6 +217,10 @@ public class Piper: NSObject {
 
     // MARK: - Private
 
+    func getMemoryUsage() -> UInt64? {
+        return MemoryInfo.getMemoryUsage()
+    }
+
     private func getOptions(for fragment: SSMLNode, speakerId: Int32) -> piper_synthesize_options {
         var options = piper_default_synthesize_options(synthesizer)
         let speed = fragment.lengthScale
@@ -234,7 +239,7 @@ public class Piper: NSObject {
         for sentence in sentences {
             autoreleasepool {
                 if let memoryThresholdBytes,
-                   let memory = MemoryInfo.getMemoryUsage(), 
+                   let memory = getMemoryUsage(),
                    memory > memoryThresholdBytes {
                     recreateSynthesizer()
                 }
