@@ -22,19 +22,23 @@ public class Piper: NSObject {
     private let modelPath: String
     private let configPath: String
     private let espeakData: String
-    public var memoryThresholdBytes: UInt64? = nil
-    private var totalSSMLBytesGenerated = 0
 
-    private let operationQueue: OperationQueue = {
+    private let dispatchQueue: DispatchQueue = {
+        DispatchQueue(label: "\(Piper.self).main", qos: .userInteractive)
+    }()
+    private lazy var operationQueue: OperationQueue = {
         let queue = OperationQueue()
-        queue.name = "\(Piper.self).main"
         queue.maxConcurrentOperationCount = 1
         queue.qualityOfService = .userInteractive
+        queue.underlyingQueue = self.dispatchQueue
         return queue
     }()
+    public var memoryThresholdBytes: UInt64? = nil
+    private var totalSSMLBytesGenerated = 0
     private let ssmlParser = SSMLParser()
     private var _status: PiperStatus = .created
     private let statusLock = NSLock()
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     public weak var delegate: PiperDelegate?
 
@@ -64,11 +68,18 @@ public class Piper: NSObject {
     }
 
     func recreateSynthesizer() {
-        if let syn = synthesizer {
-            piper_free(syn)
-            synthesizer = nil
-        }
+        dispatchPrecondition(condition: .onQueue(dispatchQueue))
+        releaseSynthesizer()
         synthesizer = piper_create(modelPath, configPath, espeakData)
+    }
+    
+    private func releaseSynthesizer() {
+        dispatchPrecondition(condition: .onQueue(dispatchQueue))
+
+        guard let syn = synthesizer else { return }
+
+        piper_free(syn)
+        synthesizer = nil
     }
 
     public convenience init?(modelPath: String, andConfigPath modelConfigPath: String) {
@@ -88,6 +99,7 @@ public class Piper: NSObject {
         }
         self.synthesizer = syn
         self.status = .created
+        setupMemoryPressureMonitoring()
     }
 
     deinit {
@@ -96,6 +108,7 @@ public class Piper: NSObject {
             piper_free(syn)
             synthesizer = nil
         }
+        memoryPressureSource?.cancel()
     }
 
     public func completed() -> Bool {
@@ -115,8 +128,8 @@ public class Piper: NSObject {
         addClearBeforeStartingOperation()
         
         operationQueue.addOperation { [weak self] in
-            guard let self = self, let syn = self.synthesizer else { return }
-            let options = piper_default_synthesize_options(syn)
+            guard let self = self else { return }
+            let options = piper_default_synthesize_options(self.synthesizer)
             // Create a dummy SSMLNode to represent the plain text.
             // This unifies the synthesis pipeline for marker generation.
             let ssmlFragment = SSMLNode(text: text, lengthScale: options.length_scale, ssmlRange: NSRange(location: 0, length: text.count))
@@ -221,6 +234,24 @@ public class Piper: NSObject {
         return MemoryInfo.getMemoryUsage()
     }
 
+    private func setupMemoryPressureMonitoring() {
+        // This works in both the main app and app extensions.
+        memoryPressureSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: dispatchQueue)
+        memoryPressureSource?.setEventHandler { [weak self] in
+            guard let self = self else { return }
+
+            guard let event = self.memoryPressureSource?.data else {
+                return
+            }
+            if event.contains(.critical) {
+                self.releaseSynthesizer()
+            } else if event.contains(.warning) {
+                self.recreateSynthesizer()
+            }
+        }
+        memoryPressureSource?.resume()
+    }
+
     private func getOptions(for fragment: SSMLNode, speakerId: Int32) -> piper_synthesize_options {
         var options = piper_default_synthesize_options(synthesizer)
         let speed = fragment.lengthScale
@@ -242,6 +273,10 @@ public class Piper: NSObject {
                    let memory = getMemoryUsage(),
                    memory > memoryThresholdBytes {
                     recreateSynthesizer()
+                }
+                
+                if synthesizer == nil {
+                    synthesizer = piper_create(modelPath, configPath, espeakData)
                 }
 
                 guard synthesizer != nil else {

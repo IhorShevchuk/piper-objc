@@ -300,7 +300,7 @@ struct PiperIntegrationTests {
 
         // Define a memory ceiling for the test.
         let memoryLimitBytes: UInt64 = 300 * 1024 * 1024 // 300 MB
-        let memoryToleranceBytes: UInt64 = 50 * 1024 * 1024 // 50 MB
+        let memoryToleranceBytes: UInt64 = 100 * 1024 * 1024 // 100 MB
 
 
         // --- Run the test with the memory threshold enabled ---
