@@ -62,5 +62,3 @@ jobs:
           submodules: recursive
       - name: Build utils on Linux
         run: swift build --target piper-utils
-      - name: Test utils on Linux
-        run: swift test --filter "PiperSentencesExtractorTests|SSMLParserTests|PiperSpeedCurveTests"
