@@ -119,7 +119,10 @@ public class Piper: NSObject {
         status = .canceled
         totalSSMLBytesGenerated = 0
         operationQueue.cancelAllOperations()
-        operationQueue.waitUntilAllOperationsAreFinished()
+        // Don't block if we're already on the queue – avoids potential deadlock
+        if OperationQueue.current != operationQueue {
+            operationQueue.waitUntilAllOperationsAreFinished()
+        }
     }
 
     // MARK: - Synthesis
@@ -404,8 +407,12 @@ public class Piper: NSObject {
             try? self.writeWavHeader(to: fileHandle, sampleRate: Int32(chunk.sample_rate))
             isHeaderWritten = true
         }
-        let buffer = UnsafeBufferPointer(start: chunk.samples, count: Int(chunk.num_samples))
-        fileHandle.write(Data(buffer: buffer))
+        // Avoid Data copy – write directly from synthesizer's buffer
+        let numBytes = Int(chunk.num_samples) * MemoryLayout<Float>.size
+        if numBytes > 0, let samples = chunk.samples {
+            // FileHandle.write(Data) copies; using raw fd avoids extra allocation
+            _ = Darwin.write(fileHandle.fileDescriptor, samples, numBytes)
+        }
     }
 
     private func addClearBeforeStartingOperation() {
