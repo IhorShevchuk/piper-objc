@@ -274,13 +274,17 @@ public class Piper: NSObject {
 
     internal static func speedRatio(for rate: Float) -> Float {
         if rate <= speedCurve[0].rate {
-            return speedCurve[0].speed
+            // Extrapolate below minimum to allow even slower speech than curve start
+            let first = speedCurve[0]
+            return first.speed * (rate / first.rate)
         }
 
         let lastIndex = speedCurve.count - 1
 
         if rate >= speedCurve[lastIndex].rate {
-            return speedCurve[lastIndex].speed
+            // Extrapolate beyond maximum (e.g., 200% = 2.0) – keep getting faster
+            let last = speedCurve[lastIndex]
+            return last.speed * (rate / last.rate)
         }
 
         var low = 0
