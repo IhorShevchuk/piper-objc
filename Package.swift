@@ -26,28 +26,33 @@ let package = Package(
                  from: "2026.04.06")
     ],
     targets: [
-        .target(name: "piper-objc",
-                dependencies: [
-                    .product(name: "piper1-gpl", package: "piper1-gpl-spm"),
-                    .product(name: "espeak-ng-data", package: "espeak-ng-spm"),
-                    .target(name: "piper-utils"),
-                ],
-                path: "Sources/piper-objc",
-                cxxSettings: [
-                    .headerSearchPath("utils"),
-                    .unsafeFlags(["-fmodules", "-fcxx-modules"])
-                ],
-               ),
+        .target(
+            name: "piper-objc",
+            dependencies: [
+                .product(name: "piper1-gpl", package: "piper1-gpl-spm"),
+                .product(name: "espeak-ng-data", package: "espeak-ng-spm"),
+                .target(name: "piper-utils")
+            ],
+            path: "Sources/piper-objc",
+            cxxSettings: [
+                .headerSearchPath("utils"),
+                .unsafeFlags(["-fmodules", "-fcxx-modules"])
+            ]
+        ),
         .target(name: "piper-utils"),
-        .target(name: "piper-player",
-                dependencies: [
-                    .target(name: "piper-objc")
-                ]),
-        .testTarget(name: "piper-objc-tests",
-                   dependencies: [
-                    .target(name: "piper-utils"),
-                    .target(name: "piper-objc")
-                   ])
+        .target(
+            name: "piper-player",
+            dependencies: [
+                .target(name: "piper-objc")
+            ]
+        ),
+        .testTarget(
+            name: "piper-objc-tests",
+            dependencies: [
+                .target(name: "piper-utils"),
+                .target(name: "piper-objc")
+            ]
+        )
     ],
     cxxLanguageStandard: .cxx17
 )

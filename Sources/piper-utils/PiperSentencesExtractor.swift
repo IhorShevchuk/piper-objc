@@ -1,4 +1,3 @@
-//
 //  PiperSentencesExtractor.swift
 //  piper-objc
 //
@@ -6,7 +5,9 @@
 //
 
 import Foundation
+#if canImport(NaturalLanguage)
 import NaturalLanguage
+#endif
 
 public final class PiperSentencesExtractor {
     
@@ -30,6 +31,7 @@ public final class PiperSentencesExtractor {
         }
 
         return AnySequence {
+#if canImport(NaturalLanguage)
             let language = detectLanguage(for: text)
             let tokenizer = NLTokenizer(unit: .sentence)
             tokenizer.string = text
@@ -59,6 +61,22 @@ public final class PiperSentencesExtractor {
                 }
                 return currentChunks.removeFirst()
             }
+#else
+            // Linux / platforms without NaturalLanguage – simple sentence splitter
+            let sentences = naiveSentenceSplit(text)
+            var sentenceIterator = sentences.makeIterator()
+            var currentChunks: [String] = []
+
+            return AnyIterator<String> {
+                while currentChunks.isEmpty {
+                    guard let next = sentenceIterator.next() else { return nil }
+                    let normalized = normalize(next)
+                    if normalized.isEmpty { continue }
+                    currentChunks = processSentence(normalized, recursionDepth: 0)
+                }
+                return currentChunks.removeFirst()
+            }
+#endif
         }
     }
     
@@ -132,13 +150,18 @@ public final class PiperSentencesExtractor {
     private static func isValidChunk(_ text: String) -> Bool {
         if text.count > Constants.maxCharactersPerChunk { return false }
         
-        // Count words efficiently
+#if canImport(NaturalLanguage)
+        // Apple platforms – use linguistic word enumeration
         var wordCount = 0
         text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { _, _, _, _ in
             wordCount += 1
         }
-        
         return wordCount <= Constants.maxWordsPerChunk
+#else
+        // Linux fallback – naive whitespace split (byWords unavailable in corelibs)
+        let words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        return words.count <= Constants.maxWordsPerChunk
+#endif
     }
     
     private static func normalize(_ text: String) -> String {
@@ -149,12 +172,32 @@ public final class PiperSentencesExtractor {
             options: .regularExpression
         )
     }
-    
+
+#if canImport(NaturalLanguage)
     private static func detectLanguage(for text: String) -> NLLanguage? {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(text)
         return recognizer.dominantLanguage
     }
+#else
+    /// Linux fallback – split on .!? while keeping delimiter
+    private static func naiveSentenceSplit(_ text: String) -> [String] {
+        var results: [String] = []
+        var current = ""
+        for char in text {
+            current.append(char)
+            if Constants.sentenceEndPunctuation.containsUnicodeScalars(of: char) {
+                let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { results.append(trimmed) }
+                current = ""
+            }
+        }
+        let leftover = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !leftover.isEmpty { results.append(leftover) }
+        if results.isEmpty { results = [text] }
+        return results
+    }
+#endif
 }
 
 // MARK: - CharacterSet Extension
