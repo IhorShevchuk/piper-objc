@@ -12,10 +12,14 @@ struct PiperSpeedCurveTests {
         #expect(speed == 0.5001928457, "Speed for rate below minimum should be clamped to the first value.")
     }
 
-    @Test("Rate above maximum returns last speed")
+    @Test("Rate above maximum extrapolates beyond last speed")
     func testRateAboveMaximum() {
+        // 200% (2.0) should be faster than 100% (1.0) – extrapolate linearly beyond max
+        // For 1.1, expected = 3.9443088883 * 1.1 / 1.0 = 4.33873977713
         let speed = Piper.speedRatio(for: 1.1)
-        #expect(speed == 3.9443088883, "Speed for rate above maximum should be clamped to the last value.")
+        let expected: Float = 3.9443088883 * 1.1
+        let tolerance: Float = 0.0001
+        #expect(abs(speed - expected) < tolerance, "Speed for rate above maximum should extrapolate beyond max. Expected \(expected), got \(speed)")
     }
 
     @Test("Rate at minimum returns first speed")

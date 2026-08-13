@@ -280,7 +280,9 @@ public class Piper: NSObject {
         let lastIndex = speedCurve.count - 1
 
         if rate >= speedCurve[lastIndex].rate {
-            return speedCurve[lastIndex].speed
+            // Extrapolate beyond maximum (e.g., 200% = 2.0) – keep getting faster
+            let last = speedCurve[lastIndex]
+            return last.speed * (rate / last.rate)
         }
 
         var low = 0
@@ -305,7 +307,6 @@ public class Piper: NSObject {
         let progress = (rate - lower.rate) / (upper.rate - lower.rate)
         return lower.speed + progress * (upper.speed - lower.speed)
     }
-
     private func getOptions(for fragment: SSMLNode, speakerId: Int32) -> piper_synthesize_options {
         var options = piper_default_synthesize_options(synthesizer)
 
