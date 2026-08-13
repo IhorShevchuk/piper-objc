@@ -29,7 +29,8 @@ public final class SSMLParser: NSObject {
         self.onNode = onNode
         defer { self.onNode = nil }
         
-        guard let data = ssml.data(using: .utf8) else {
+        guard !ssml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let data = ssml.data(using: .utf8) else {
             return
         }
         
@@ -44,7 +45,10 @@ public final class SSMLParser: NSObject {
         parser.delegate = self
         
         if !parser.parse() {
-            onNode(SSMLNode(text: ssml, lengthScale: 1.0, ssmlRange: NSRange(location: 0, length: ssml.utf16.count)))
+            // If parsing fails, treat the whole string as a single text node if it's not just tags.
+            if !ssml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                onNode(SSMLNode(text: ssml, lengthScale: 1.0, ssmlRange: NSRange(location: 0, length: ssml.utf16.count)))
+            }
             return
         }
 

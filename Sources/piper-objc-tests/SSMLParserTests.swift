@@ -64,12 +64,11 @@ struct SSMLParserTests {
         let parser = SSMLParser()
         var n0: [SSMLNode] = []
         parser.parse(ssml: "") { n0.append($0) }
-        #expect(n0.count == 1, "Empty input nodes: \(n0.count)")
-        #expect(n0[0].text == "", "Empty node text: \(n0[0].text)")
+        #expect(n0.isEmpty, "Empty input should produce no nodes")
         var n1: [SSMLNode] = []
         parser.parse(ssml: "<prosody>") { n1.append($0) }
-        #expect(n1.count == 1, "Malformed input nodes: \(n1.count)")
-        #expect(n1[0].text == "<prosody>", "Malformed node text: \(n1[0].text)")
+        #expect(n1.count == 1, "Malformed input should be treated as plain text")
+        #expect(n1[0].text == "<prosody>", "Malformed node text should be the input string")
         var n2: [SSMLNode] = []
         parser.parse(ssml: "<prosody rate=\"abc\">text</prosody>") { n2.append($0) }
         #expect(n2.count == 1)

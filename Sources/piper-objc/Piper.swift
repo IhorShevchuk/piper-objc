@@ -252,12 +252,67 @@ public class Piper: NSObject {
         memoryPressureSource?.resume()
     }
 
+    private static let speedCurve: [(rate: Float, speed: Float)] = [
+        (0.20, 0.5001928457),
+        (0.25, 0.5550218062),
+        (0.30, 0.6285364609),
+        (0.35, 0.7189278745),
+        (0.40, 0.8310849027),
+        (0.45, 0.9119920277),
+        (0.50, 1.0000000000),
+        (0.55, 1.2926956961),
+        (0.60, 1.5843505525),
+        (0.65, 1.8302883372),
+        (0.70, 2.1208013904),
+        (0.75, 2.4720048684),
+        (0.80, 2.7988931243),
+        (0.85, 2.8403447397),
+        (0.90, 3.1448106796),
+        (0.95, 3.5158276796),
+        (1.00, 3.9443088883)
+    ]
+
+    internal static func speedRatio(for rate: Float) -> Float {
+        if rate <= speedCurve[0].rate {
+            return speedCurve[0].speed
+        }
+
+        let lastIndex = speedCurve.count - 1
+
+        if rate >= speedCurve[lastIndex].rate {
+            return speedCurve[lastIndex].speed
+        }
+
+        var low = 0
+        var high = lastIndex
+
+        while low <= high {
+            let mid = (low + high) / 2
+            let point = speedCurve[mid]
+
+            if point.rate < rate {
+                low = mid + 1
+            } else if point.rate > rate {
+                high = mid - 1
+            } else {
+                return point.speed
+            }
+        }
+
+        let lower = speedCurve[high]
+        let upper = speedCurve[low]
+
+        let progress = (rate - lower.rate) / (upper.rate - lower.rate)
+        return lower.speed + progress * (upper.speed - lower.speed)
+    }
+
     private func getOptions(for fragment: SSMLNode, speakerId: Int32) -> piper_synthesize_options {
         var options = piper_default_synthesize_options(synthesizer)
-        let speed = fragment.lengthScale
-        let lengthScale = speed > 0 ? 1.0 / speed : 1.0
-        options.length_scale = max(0.1, min(Float(lengthScale), 10.0))
+
+        let speedRatio = Piper.speedRatio(for: fragment.lengthScale)
+        options.length_scale = max(0.1, min(1.0 / speedRatio, 10.0))
         options.speaker_id = speakerId
+
         return options
     }
 
