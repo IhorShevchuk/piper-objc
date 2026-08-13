@@ -274,9 +274,7 @@ public class Piper: NSObject {
 
     internal static func speedRatio(for rate: Float) -> Float {
         if rate <= speedCurve[0].rate {
-            // Extrapolate below minimum to allow even slower speech than curve start
-            let first = speedCurve[0]
-            return first.speed * (rate / first.rate)
+            return speedCurve[0].speed
         }
 
         let lastIndex = speedCurve.count - 1
@@ -309,7 +307,6 @@ public class Piper: NSObject {
         let progress = (rate - lower.rate) / (upper.rate - lower.rate)
         return lower.speed + progress * (upper.speed - lower.speed)
     }
-
     private func getOptions(for fragment: SSMLNode, speakerId: Int32) -> piper_synthesize_options {
         var options = piper_default_synthesize_options(synthesizer)
 
