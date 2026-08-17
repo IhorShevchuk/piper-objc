@@ -136,13 +136,14 @@ public class Piper: NSObject {
 
     public func synthesize(_ text: String) {
         addClearBeforeStartingOperation()
+        totalSSMLBytesGenerated = 0
         
         operationQueue.addOperation { [weak self] in
             guard let self = self else { return }
             let options = piper_default_synthesize_options(self.synthesizer)
             // Create a dummy SSMLNode to represent the plain text.
             // This unifies the synthesis pipeline for marker generation.
-            let ssmlFragment = SSMLNode(text: text, lengthScale: options.length_scale, ssmlRange: NSRange(location: 0, length: text.count))
+            let ssmlFragment = SSMLNode(text: text, lengthScale: options.length_scale, ssmlRange: NSRange(location: 0, length: (text as NSString).length))
             self.doSynthesize(text: text, options: options, ssmlFragment: ssmlFragment, onChunkReady: { chunk in
                 self.delegate?.piperDidReceiveSamples(chunk.samples, withSize: Int(chunk.num_samples))
             }, onMarkers: { markers in
@@ -183,6 +184,7 @@ public class Piper: NSObject {
 
     public func synthesizeSSML(_ ssml: String, speakerId: Int32) {
         addClearBeforeStartingOperation()
+        totalSSMLBytesGenerated = 0
         
         operationQueue.addOperation { [weak self] in
             guard let self = self else { return }
