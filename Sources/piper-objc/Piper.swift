@@ -8,6 +8,13 @@ import libespeak_ng
     func piperDidGenerateMarkers(_ markers: [PiperSpeechMarker])
 }
 
+// Swift-only extension – alignment callback is optional via default impl (keeps @objc compat)
+public extension PiperDelegate {
+    func piperDidReceiveAlignment(groups: [PiperAlignmentParser.PhonemeGroup]) {
+        // default no-op; implementors can override for highlighting
+    }
+}
+
 @objc public enum PiperStatus: Int {
     case created
     case rendering
@@ -129,13 +136,14 @@ public class Piper: NSObject {
 
     public func synthesize(_ text: String) {
         addClearBeforeStartingOperation()
+        totalSSMLBytesGenerated = 0
         
         operationQueue.addOperation { [weak self] in
             guard let self = self else { return }
             let options = piper_default_synthesize_options(self.synthesizer)
             // Create a dummy SSMLNode to represent the plain text.
             // This unifies the synthesis pipeline for marker generation.
-            let ssmlFragment = SSMLNode(text: text, lengthScale: options.length_scale, ssmlRange: NSRange(location: 0, length: text.count))
+            let ssmlFragment = SSMLNode(text: text, lengthScale: options.length_scale, ssmlRange: NSRange(location: 0, length: (text as NSString).length))
             self.doSynthesize(text: text, options: options, ssmlFragment: ssmlFragment, onChunkReady: { chunk in
                 self.delegate?.piperDidReceiveSamples(chunk.samples, withSize: Int(chunk.num_samples))
             }, onMarkers: { markers in
@@ -176,6 +184,7 @@ public class Piper: NSObject {
 
     public func synthesizeSSML(_ ssml: String, speakerId: Int32) {
         addClearBeforeStartingOperation()
+        totalSSMLBytesGenerated = 0
         
         operationQueue.addOperation { [weak self] in
             guard let self = self else { return }
@@ -366,6 +375,7 @@ public class Piper: NSObject {
                 }
                 
                 var sentenceTotalBytes = 0
+                var sentenceAlignmentGroups: [PiperAlignmentParser.PhonemeGroup] = []
                 var chunk = piper_audio_chunk()
                 var piperStatus = PIPER_OK
                 repeat {
@@ -374,9 +384,33 @@ public class Piper: NSObject {
                         status = .error
                     }
                     if status != .rendering { return }
-                    if chunk.num_samples == 0 { break }
+                    if chunk.num_samples == 0 {
+                        // Even if no samples, we may still have alignments for punctuation handling?
+                        // Break but keep any previously collected groups
+                        if chunk.num_alignments == 0 { break }
+                    }
                     
                     onChunkReady(chunk)
+
+                    // ---- Alignment grouping (piper.h rule) ----
+                    // Groups of repeated codepoints separated by 0 -> N ids & N alignments per phoneme
+                    // BOS=1,PAD=0,EOS=2 are special and ignored for highlighting but kept for cumulative offset
+                    if let phonemesPtr = chunk.phonemes, let idsPtr = chunk.phoneme_ids, let alignPtr = chunk.alignments,
+                       chunk.num_phonemes > 0, chunk.num_phoneme_ids > 0, chunk.num_alignments > 0 {
+                        let groups = PiperAlignmentParser.group(
+                            phonemesPtr: phonemesPtr,
+                            numPhonemes: Int(chunk.num_phonemes),
+                            idsPtr: idsPtr,
+                            numIds: Int(chunk.num_phoneme_ids),
+                            alignmentsPtr: alignPtr,
+                            numAlignments: Int(chunk.num_alignments)
+                        )
+                        if !groups.isEmpty {
+                            sentenceAlignmentGroups.append(contentsOf: groups)
+                            // Notify delegate incrementally (optional)
+                            self.delegate?.piperDidReceiveAlignment(groups: groups)
+                        }
+                    }
                     
                     let chunkBytes = Int(chunk.num_samples) * MemoryLayout<Float>.size
                     sentenceTotalBytes += chunkBytes
@@ -385,8 +419,18 @@ public class Piper: NSObject {
                 self.totalSSMLBytesGenerated += sentenceTotalBytes
                 
                 if nsRange.location != NSNotFound, let onMarkers {
-                    let markers = PiperSpeechMarker.generateMarkers(for: sentence, sentenceNSRange: nsRange, startByteOffset: sentenceStartByteOffset, totalBytes: sentenceTotalBytes)
-                    onMarkers(markers)
+                    if !sentenceAlignmentGroups.isEmpty {
+                        let markers = PiperSpeechMarker.generateMarkersWithAlignment(
+                            for: sentence,
+                            sentenceNSRange: nsRange,
+                            startByteOffset: sentenceStartByteOffset,
+                            groups: sentenceAlignmentGroups
+                        )
+                        onMarkers(markers)
+                    } else {
+                        let markers = PiperSpeechMarker.generateMarkers(for: sentence, sentenceNSRange: nsRange, startByteOffset: sentenceStartByteOffset, totalBytes: sentenceTotalBytes)
+                        onMarkers(markers)
+                    }
                 }
             }
         }
