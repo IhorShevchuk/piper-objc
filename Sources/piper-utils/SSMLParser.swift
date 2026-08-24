@@ -41,7 +41,7 @@ public final class SSMLParser: NSObject {
         ssmlCurrentLocation = ssmlSource.startIndex
         
         stack = [
-            SSMLContext(text: "", rate: 1.0)
+            SSMLContext(text: "", rate: 0.5)
         ]
         
         let parser = XMLParser(data: data)
@@ -71,7 +71,7 @@ extension SSMLParser: XMLParserDelegate {
         
         flushCurrentText()
 
-        let parent = stack.last ?? SSMLContext(text: "", rate: 1.0)
+        let parent = stack.last ?? SSMLContext(text: "", rate: 0.5)
         
         var newContext = SSMLContext(
             text: "",
@@ -145,6 +145,6 @@ private extension SSMLParser {
                 return Float(rate / 100.0)
             }
         }
-        return 1.0
+                return 0.5
     }
 }
