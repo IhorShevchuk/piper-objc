@@ -145,6 +145,6 @@ private extension SSMLParser {
                 return Float(rate / 100.0)
             }
         }
-                return 0.5
+        return 0.5
     }
 }

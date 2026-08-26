@@ -6,7 +6,7 @@
       "location" : "https://github.com/IhorShevchuk/espeak-ng-spm.git",
       "state" : {
         "revision" : "8ffabfe9998f6d7f5fb768f5489ea4b7873e2829",
-        "version" : "2026.4.6"
+        "version" : "2026.4.7"
       }
     },
     {
@@ -14,8 +14,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/IhorShevchuk/piper1-gpl-spm.git",
       "state" : {
-        "revision" : "e22aecccee527753466264a85fb763641cfc4db8",
-        "version" : "0.1.10"
+        "revision" : "7c33729e49aa9c1dac09be14bef1630713cc9cd3",
+        "version" : "0.1.13"
       }
     }
   ],
