@@ -429,6 +429,83 @@ struct PiperIntegrationTests {
         #expect(piper.recreationCount == 3, "Synthesizer should be recreated for each of the 3 sentences.")
         #expect(delegate.sampleCount > 0, "Synthesis should complete successfully despite multiple recreations.")
     }
+
+    @Test("Piper modern API – initializes and synthesizes using PiperCreateOptions")
+    func testPiperModernAPIWithOptions() async throws {
+        let options = PiperCreateOptions(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakDataPath: PiperTestAssets.espeakNGDataPath,
+            dataDir: nil,
+            g2pwModelDir: nil
+        )
+        guard let piper = Piper(options: options) else {
+            #expect(Bool(false), "Failed to initialize Piper with modern options API")
+            return
+        }
+
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+
+        let outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("test_modern_options.wav").path
+
+        // Test both delegate-based and file-based synthesis paths work with options API
+        await withCheckedContinuation { continuation in
+            piper.synthesize("Hello from modern Piper options API.", toFileAtPath: outputPath) {
+                continuation.resume()
+            }
+        }
+
+        #expect(FileManager.default.fileExists(atPath: outputPath))
+        let attrs = try? FileManager.default.attributesOfItem(atPath: outputPath)
+        let size = attrs?[.size] as? Int64 ?? 0
+        #expect(size > 1024, "WAV from modern API should be >1KB (found \(size) bytes)")
+
+        // Also verify delegate path produces markers and samples
+        let piper2 = Piper(options: options)!
+        let delegate2 = TestPiperDelegate()
+        piper2.delegate = delegate2
+        piper2.synthesize("Modern API marker test. Second sentence.")
+        var attempts = 0
+        while !piper2.completed() && attempts < 50 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            attempts += 1
+        }
+        #expect(delegate2.receivedSamples, "Modern API should deliver samples via delegate")
+        #expect(delegate2.sampleCount > 0)
+        let allMarkers = delegate2.allMarkers.flatMap { $0 }
+        #expect(!allMarkers.isEmpty, "Modern API should generate markers")
+        #expect(allMarkers.filter { $0.type == .sentence }.count >= 1)
+
+        try? FileManager.default.removeItem(atPath: outputPath)
+    }
+
+    @Test("Piper modern API with explicit dataDir/g2pw (Chinese-ready) – backward compatible for English")
+    func testPiperModernAPIWithDataDir() async throws {
+        // For English, dataDir/g2pw are optional – passing them as nil or empty should still work
+        // This validates the piper_create_with_options fields don't break existing voices
+        let options = PiperCreateOptions(
+            modelPath: PiperTestAssets.modelPath,
+            configPath: PiperTestAssets.configPath,
+            espeakDataPath: PiperTestAssets.espeakNGDataPath,
+            dataDir: FileManager.default.temporaryDirectory.path, // valid dir but irrelevant for English
+            g2pwModelDir: nil
+        )
+        guard let piper = Piper(options: options) else {
+            #expect(Bool(false), "Modern API with dataDir should still init for English voice")
+            return
+        }
+        let delegate = TestPiperDelegate()
+        piper.delegate = delegate
+        piper.synthesize("Data dir option should not break English synthesis.")
+        var attempts = 0
+        while !piper.completed() && attempts < 50 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            attempts += 1
+        }
+        #expect(piper.completed())
+        #expect(delegate.sampleCount > 0, "English voice should synthesize even when dataDir is set")
+    }
 }
 
 /// A simple delegate for testing synthesis output.
