@@ -29,6 +29,8 @@ public class Piper: NSObject {
     private let modelPath: String
     private let configPath: String
     private let espeakData: String
+    private let dataDir: String?
+    private let g2pwModelDir: String?
 
     private let dispatchQueue: DispatchQueue = {
         DispatchQueue(label: "\(Piper.self).main", qos: .userInteractive)
@@ -74,10 +76,43 @@ public class Piper: NSObject {
         return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
     }
 
+    private static func makeSynthesizer(modelPath: String, configPath: String, espeakData: String, dataDir: String? = nil, g2pwDir: String? = nil) -> OpaquePointer? {
+        var opts = piper_create_options()
+        opts.struct_size = MemoryLayout<piper_create_options>.size
+        opts.model_path = nil
+        opts.config_path = nil
+        opts.espeak_data_path = nil
+        opts.g2pw_model_dir = nil
+        opts.data_dir = nil
+
+        func withOptionalCString<T>(_ str: String?, _ body: (UnsafePointer<CChar>?) -> T) -> T {
+            guard let s = str, !s.isEmpty else { return body(nil) }
+            return s.withCString { body($0) }
+        }
+
+        return withOptionalCString(modelPath) { modelC in
+            withOptionalCString(configPath) { configC in
+                withOptionalCString(espeakData) { espeakC in
+                    withOptionalCString(dataDir) { dataDirC in
+                        withOptionalCString(g2pwDir) { g2pwC in
+                            var mutableOpts = opts
+                            mutableOpts.model_path = modelC
+                            mutableOpts.config_path = configC
+                            mutableOpts.espeak_data_path = espeakC
+                            mutableOpts.data_dir = dataDirC
+                            mutableOpts.g2pw_model_dir = g2pwC
+                            return piper_create_with_options(&mutableOpts)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     func recreateSynthesizer() {
         dispatchPrecondition(condition: .onQueue(dispatchQueue))
         releaseSynthesizer()
-        synthesizer = piper_create(modelPath, configPath, espeakData)
+        synthesizer = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir)
     }
     
     private func releaseSynthesizer() {
@@ -90,18 +125,20 @@ public class Piper: NSObject {
     }
 
     public convenience init?(modelPath: String, andConfigPath modelConfigPath: String) {
-        self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "")
+        self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "", dataDir: nil, g2pwModelDir: nil)
     }
 
-    public init?(modelPath: String, configPath: String, espeakNGData: String) {
+    public init?(modelPath: String, configPath: String, espeakNGData: String, dataDir: String? = nil, g2pwModelDir: String? = nil) {
         let espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
         self.modelPath = modelPath
         self.configPath = configPath
         self.espeakData = espeakData
+        self.dataDir = dataDir
+        self.g2pwModelDir = g2pwModelDir
         super.init()
         self.operationQueue.name = "\(type(of: self))Queue"
         
-        guard let syn = piper_create(modelPath, configPath, espeakData) else {
+        guard let syn = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir) else {
             return nil
         }
         self.synthesizer = syn
@@ -344,7 +381,7 @@ public class Piper: NSObject {
                 }
                 
                 if synthesizer == nil {
-                    synthesizer = piper_create(modelPath, configPath, espeakData)
+                    synthesizer = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir)
                 }
 
                 guard synthesizer != nil else {
