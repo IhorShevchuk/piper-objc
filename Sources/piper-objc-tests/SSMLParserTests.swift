@@ -44,19 +44,19 @@ struct SSMLParserTests {
     @Test("handles French prosody inside speak tag")
     func testNestedFrenchProsody() {
         let parser = SSMLParser()
-        let ssml = "<speak>L’élève <prosody rate=\"50%\">écoute</prosody> bien.</speak>"
+        let ssml = "<speak>L’élève <prosody rate=\"100%\">écoute</prosody> bien.</speak>"
         var nodes: [SSMLNode] = []
         parser.parse(ssml: ssml) { nodes.append($0) }
         #expect(nodes.count == 3, "Node count: \(nodes.count)")
         // Node 0: "L’élève", rate=1.0
         #expect(nodes[0].text.trimmingCharacters(in: .whitespacesAndNewlines) == "L’élève", "Node 0: \(nodes[0].text)")
-        #expect(abs(nodes[0].lengthScale - 1.0) < 0.01, "Node 0 rate: \(nodes[0].lengthScale)")
+        #expect(abs(nodes[0].lengthScale - 0.5) < 0.01, "Node 0 rate: \(nodes[0].lengthScale)")
         // Node 1: "écoute", rate=0.5
         #expect(nodes[1].text.trimmingCharacters(in: .whitespacesAndNewlines) == "écoute", "Node 1: \(nodes[1].text)")
-        #expect(abs(nodes[1].lengthScale - 0.5) < 0.01, "Node 1 rate: \(nodes[1].lengthScale)")
+        #expect(abs(nodes[1].lengthScale - 1.0) < 0.01, "Node 1 rate: \(nodes[1].lengthScale)")
         // Node 2: " bien.", rate=1.0
         #expect(nodes[2].text.trimmingCharacters(in: .whitespacesAndNewlines) == "bien.", "Node 2: \(nodes[2].text)")
-        #expect(abs(nodes[2].lengthScale - 1.0) < 0.01, "Node 2 rate: \(nodes[2].lengthScale)")
+        #expect(abs(nodes[2].lengthScale - 0.5) < 0.01, "Node 2 rate: \(nodes[2].lengthScale)")
     }
 
     @Test("returns empty for malformed or empty input")
@@ -73,7 +73,7 @@ struct SSMLParserTests {
         parser.parse(ssml: "<prosody rate=\"abc\">text</prosody>") { n2.append($0) }
         #expect(n2.count == 1)
         #expect(n2[0].text == "text", "Node text: \(n2[0].text)")
-        #expect(n2[0].lengthScale == 1.0, "Node rate: \(n2[0].lengthScale)")
+        #expect(n2[0].lengthScale == 0.5, "Node rate: \(n2[0].lengthScale)")
     }
 
     @Test("handles XML entities correctly")
