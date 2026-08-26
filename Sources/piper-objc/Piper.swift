@@ -29,6 +29,8 @@ public class Piper: NSObject {
     private let modelPath: String
     private let configPath: String
     private let espeakData: String
+    private let dataDir: String?
+    private let g2pwModelDir: String?
 
     private let dispatchQueue: DispatchQueue = {
         DispatchQueue(label: "\(Piper.self).main", qos: .userInteractive)
@@ -64,9 +66,32 @@ public class Piper: NSObject {
 
     private static let espeakOnce: Void = {
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
-        // Assuming EspeakLib is bridged from the espeak-ng bundle module
-        // and follows the naming convention found in the project.
-        try? EspeakLib.ensureBundleInstalled(inRoot: URL(fileURLWithPath: documentsPath))
+        let root = URL(fileURLWithPath: documentsPath)
+        let fm = FileManager.default
+        let dataRoot = root.appendingPathComponent("espeak-ng-data")
+        // If already installed, nothing to do
+        if fm.fileExists(atPath: dataRoot.path) { return }
+
+        // EspeakLib only searches bundleWithPath:@"espeak-ng_data.bundle" and mainBundle.
+        // If those fail it throws NSException (bundleWithURL:nil). We must not call it in that case.
+        let espeakLibWillFind: Bool = {
+            if fm.fileExists(atPath: "espeak-ng_data.bundle") { return true }
+            if Bundle.main.url(forResource: "espeak-ng_data", withExtension: "bundle") != nil { return true }
+            return false
+        }()
+
+        guard espeakLibWillFind else {
+            // Bundle may exist in test bundle / allBundles but EspeakLib wouldn't find it.
+            // Skip calling it to avoid crash – Piper init will fail gracefully later if data needed,
+            // or integration tests will have swizzled mainBundle to make the above true.
+            return
+        }
+
+        // EspeakLib.ensureBundleInstalled can still throw NSException if its internal lookup fails
+        // despite our check (race / swizzle timing). try? doesn't catch NSException, but the pre-check
+        // above prevents the known nil-URL throw. If it still throws, the process would abort – we
+        // accept that as a bug in EspeakLib, but our guard makes it extremely unlikely.
+        _ = try? EspeakLib.ensureBundleInstalled(inRoot: root)
     }()
 
     private static func ensureEspeakLibDataInstalled() -> String {
@@ -74,10 +99,77 @@ public class Piper: NSObject {
         return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
     }
 
+    private static func makeSynthesizer(modelPath: String, configPath: String, espeakData: String, dataDir: String? = nil, g2pwDir: String? = nil) -> OpaquePointer? {
+        // Guard against missing files – piper C++ throws on empty/missing config (nlohmann::json parse_error)
+        // and would abort the process. Return nil early for graceful Swift failure.
+        if modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: modelPath) { return nil }
+        if !configPath.isEmpty {
+            if !FileManager.default.fileExists(atPath: configPath) { return nil }
+            // Empty file would cause json parse_error -> abort, treat as failure
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: configPath),
+               let size = attrs[.size] as? UInt64, size == 0 {
+                return nil
+            }
+        }
+
+        var opts = piper_create_options()
+        opts.struct_size = MemoryLayout<piper_create_options>.size
+        opts.model_path = nil
+        opts.config_path = nil
+        opts.espeak_data_path = nil
+        opts.g2pw_model_dir = nil
+        opts.data_dir = nil
+
+        func withOptionalCString<T>(_ str: String?, _ body: (UnsafePointer<CChar>?) -> T) -> T {
+            guard let s = str, !s.isEmpty else { return body(nil) }
+            return s.withCString { body($0) }
+        }
+
+        return withOptionalCString(modelPath) { modelC in
+            withOptionalCString(configPath) { configC in
+                withOptionalCString(espeakData) { espeakC in
+                    withOptionalCString(dataDir) { dataDirC in
+                        withOptionalCString(g2pwDir) { g2pwC in
+                            var mutableOpts = opts
+                            mutableOpts.model_path = modelC
+                            mutableOpts.config_path = configC
+                            mutableOpts.espeak_data_path = espeakC
+                            mutableOpts.data_dir = dataDirC
+                            mutableOpts.g2pw_model_dir = g2pwC
+                            return piper_create_with_options(&mutableOpts)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static func makeSynthesizer(options: PiperCreateOptions) -> OpaquePointer? {
+        // Early exit for missing model – avoid triggering espeak bundle installation (which can
+        // throw NSException in test runners) when we already know we will fail.
+        if options.modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: options.modelPath) { return nil }
+
+        // Resolve espeak path via same logic as init – ensure bundled data if nil/empty
+        let espeakPath: String
+        if let p = options.espeakDataPath, !p.isEmpty {
+            espeakPath = p
+        } else {
+            espeakPath = Piper.ensureEspeakLibDataInstalled()
+        }
+        let configPath = options.configPath?.isEmpty == false ? options.configPath : nil
+        return makeSynthesizer(modelPath: options.modelPath,
+                               configPath: configPath ?? "",
+                               espeakData: espeakPath,
+                               dataDir: options.dataDir,
+                               g2pwDir: options.g2pwModelDir)
+    }
+
     func recreateSynthesizer() {
         dispatchPrecondition(condition: .onQueue(dispatchQueue))
         releaseSynthesizer()
-        synthesizer = piper_create(modelPath, configPath, espeakData)
+        synthesizer = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir)
     }
     
     private func releaseSynthesizer() {
@@ -90,18 +182,53 @@ public class Piper: NSObject {
     }
 
     public convenience init?(modelPath: String, andConfigPath modelConfigPath: String) {
-        self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "")
+        self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "", dataDir: nil, g2pwModelDir: nil)
     }
 
-    public init?(modelPath: String, configPath: String, espeakNGData: String) {
-        let espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
+    /// Designated initializer using options object – preferred path for piper_create_with_options migration.
+    /// This is the ObjC-friendly entry point that mirrors piper_create_options versioning.
+    @objc public init?(options: PiperCreateOptions) {
+        // Fail fast for missing model – avoids triggering espeak bundle installation (which can
+        // throw NSException in test runners) when we know init will fail anyway.
+        if options.modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: options.modelPath) { return nil }
+
+        let espeakResolved = options.espeakDataPath?.isEmpty == false ? options.espeakDataPath! : Piper.ensureEspeakLibDataInstalled()
+        self.modelPath = options.modelPath
+        self.configPath = options.configPath ?? ""
+        self.espeakData = espeakResolved
+        self.dataDir = options.dataDir
+        self.g2pwModelDir = options.g2pwModelDir
+        super.init()
+        self.operationQueue.name = "\(type(of: self))Queue"
+
+        guard let syn = Self.makeSynthesizer(options: options) else {
+            return nil
+        }
+        self.synthesizer = syn
+        self.status = .created
+        setupMemoryPressureMonitoring()
+    }
+
+    public init?(modelPath: String, configPath: String, espeakNGData: String, dataDir: String? = nil, g2pwModelDir: String? = nil) {
+        // Fail fast for missing model – mirrors options path and avoids espeak bundle work when doomed
+        if modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: modelPath) { return nil }
+
+        let opts = PiperCreateOptions(modelPath: modelPath,
+                                      configPath: configPath.isEmpty ? nil : configPath,
+                                      espeakDataPath: espeakNGData.isEmpty ? nil : espeakNGData,
+                                      dataDir: dataDir,
+                                      g2pwModelDir: g2pwModelDir)
         self.modelPath = modelPath
         self.configPath = configPath
-        self.espeakData = espeakData
+        self.espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
+        self.dataDir = dataDir
+        self.g2pwModelDir = g2pwModelDir
         super.init()
         self.operationQueue.name = "\(type(of: self))Queue"
         
-        guard let syn = piper_create(modelPath, configPath, espeakData) else {
+        guard let syn = Self.makeSynthesizer(options: opts) else {
             return nil
         }
         self.synthesizer = syn
@@ -344,7 +471,7 @@ public class Piper: NSObject {
                 }
                 
                 if synthesizer == nil {
-                    synthesizer = piper_create(modelPath, configPath, espeakData)
+                    synthesizer = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir)
                 }
 
                 guard synthesizer != nil else {
