@@ -109,6 +109,17 @@ public class Piper: NSObject {
         }
     }
 
+    private static func makeSynthesizer(options: PiperCreateOptions) -> OpaquePointer? {
+        // Resolve espeak path via same logic as init – ensure bundled data if nil/empty
+        let espeakPath = options.espeakDataPath?.isEmpty == false ? options.espeakDataPath : nil
+        let configPath = options.configPath?.isEmpty == false ? options.configPath : nil
+        return makeSynthesizer(modelPath: options.modelPath,
+                               configPath: configPath ?? "",
+                               espeakData: espeakPath ?? "",
+                               dataDir: options.dataDir,
+                               g2pwDir: options.g2pwModelDir)
+    }
+
     func recreateSynthesizer() {
         dispatchPrecondition(condition: .onQueue(dispatchQueue))
         releaseSynthesizer()
@@ -128,17 +139,41 @@ public class Piper: NSObject {
         self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "", dataDir: nil, g2pwModelDir: nil)
     }
 
+    /// Designated initializer using options object – preferred path for piper_create_with_options migration.
+    /// This is the ObjC-friendly entry point that mirrors piper_create_options versioning.
+    @objc public init?(options: PiperCreateOptions) {
+        let espeakResolved = options.espeakDataPath?.isEmpty == false ? options.espeakDataPath! : Piper.ensureEspeakLibDataInstalled()
+        self.modelPath = options.modelPath
+        self.configPath = options.configPath ?? ""
+        self.espeakData = espeakResolved
+        self.dataDir = options.dataDir
+        self.g2pwModelDir = options.g2pwModelDir
+        super.init()
+        self.operationQueue.name = "\(type(of: self))Queue"
+
+        guard let syn = Self.makeSynthesizer(options: options) else {
+            return nil
+        }
+        self.synthesizer = syn
+        self.status = .created
+        setupMemoryPressureMonitoring()
+    }
+
     public init?(modelPath: String, configPath: String, espeakNGData: String, dataDir: String? = nil, g2pwModelDir: String? = nil) {
-        let espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
+        let opts = PiperCreateOptions(modelPath: modelPath,
+                                      configPath: configPath.isEmpty ? nil : configPath,
+                                      espeakDataPath: espeakNGData.isEmpty ? nil : espeakNGData,
+                                      dataDir: dataDir,
+                                      g2pwModelDir: g2pwModelDir)
         self.modelPath = modelPath
         self.configPath = configPath
-        self.espeakData = espeakData
+        self.espeakData = espeakNGData.isEmpty ? Piper.ensureEspeakLibDataInstalled() : espeakNGData
         self.dataDir = dataDir
         self.g2pwModelDir = g2pwModelDir
         super.init()
         self.operationQueue.name = "\(type(of: self))Queue"
         
-        guard let syn = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir) else {
+        guard let syn = Self.makeSynthesizer(options: opts) else {
             return nil
         }
         self.synthesizer = syn
