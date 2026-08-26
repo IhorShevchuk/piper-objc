@@ -163,7 +163,7 @@ import piper_utils
         }
 
         for (i, pair) in tokenRanges.enumerated() {
-            let (originalToken, core) = pair
+            let core = pair.core
             // Find core range in sentence starting from currentSearchStart
             // First try to find original token (which includes punctuation), then inside it find core.
             // Simplified: search for core directly – more robust for "‘idealists’." case.
@@ -171,7 +171,6 @@ import piper_utils
                 continue
             }
             let locationInSentence = sentence.distance(from: sentence.startIndex, to: coreRangeInSentence.lowerBound)
-            let length = core.count // NSString length vs Swift count differs for emoji – use NSString length for NSRange compatibility
             // Use NSString-based length for safety (handles emoji composed)
             let nsLength = (core as NSString).length
             let wordNSRange = NSRange(location: sentenceNSRange.location + locationInSentence, length: nsLength)
