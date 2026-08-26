@@ -14,8 +14,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/IhorShevchuk/piper1-gpl-spm.git",
       "state" : {
-        "revision" : "7c33729e49aa9c1dac09be14bef1630713cc9cd3",
-        "version" : "0.1.13"
+        "revision" : "d69508ebc36f9c9118bba7e1e631820a1b9aec8d",
+        "version" : "0.1.14"
       }
     }
   ],
