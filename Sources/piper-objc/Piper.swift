@@ -66,9 +66,32 @@ public class Piper: NSObject {
 
     private static let espeakOnce: Void = {
         let documentsPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
-        // Assuming EspeakLib is bridged from the espeak-ng bundle module
-        // and follows the naming convention found in the project.
-        try? EspeakLib.ensureBundleInstalled(inRoot: URL(fileURLWithPath: documentsPath))
+        let root = URL(fileURLWithPath: documentsPath)
+        let fm = FileManager.default
+        let dataRoot = root.appendingPathComponent("espeak-ng-data")
+        // If already installed, nothing to do
+        if fm.fileExists(atPath: dataRoot.path) { return }
+
+        // EspeakLib only searches bundleWithPath:@"espeak-ng_data.bundle" and mainBundle.
+        // If those fail it throws NSException (bundleWithURL:nil). We must not call it in that case.
+        let espeakLibWillFind: Bool = {
+            if fm.fileExists(atPath: "espeak-ng_data.bundle") { return true }
+            if Bundle.main.url(forResource: "espeak-ng_data", withExtension: "bundle") != nil { return true }
+            return false
+        }()
+
+        guard espeakLibWillFind else {
+            // Bundle may exist in test bundle / allBundles but EspeakLib wouldn't find it.
+            // Skip calling it to avoid crash – Piper init will fail gracefully later if data needed,
+            // or integration tests will have swizzled mainBundle to make the above true.
+            return
+        }
+
+        // EspeakLib.ensureBundleInstalled can still throw NSException if its internal lookup fails
+        // despite our check (race / swizzle timing). try? doesn't catch NSException, but the pre-check
+        // above prevents the known nil-URL throw. If it still throws, the process would abort – we
+        // accept that as a bug in EspeakLib, but our guard makes it extremely unlikely.
+        _ = try? EspeakLib.ensureBundleInstalled(inRoot: root)
     }()
 
     private static func ensureEspeakLibDataInstalled() -> String {
@@ -123,6 +146,11 @@ public class Piper: NSObject {
     }
 
     private static func makeSynthesizer(options: PiperCreateOptions) -> OpaquePointer? {
+        // Early exit for missing model – avoid triggering espeak bundle installation (which can
+        // throw NSException in test runners) when we already know we will fail.
+        if options.modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: options.modelPath) { return nil }
+
         // Resolve espeak path via same logic as init – ensure bundled data if nil/empty
         let espeakPath: String
         if let p = options.espeakDataPath, !p.isEmpty {
@@ -160,6 +188,11 @@ public class Piper: NSObject {
     /// Designated initializer using options object – preferred path for piper_create_with_options migration.
     /// This is the ObjC-friendly entry point that mirrors piper_create_options versioning.
     @objc public init?(options: PiperCreateOptions) {
+        // Fail fast for missing model – avoids triggering espeak bundle installation (which can
+        // throw NSException in test runners) when we know init will fail anyway.
+        if options.modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: options.modelPath) { return nil }
+
         let espeakResolved = options.espeakDataPath?.isEmpty == false ? options.espeakDataPath! : Piper.ensureEspeakLibDataInstalled()
         self.modelPath = options.modelPath
         self.configPath = options.configPath ?? ""
@@ -178,6 +211,10 @@ public class Piper: NSObject {
     }
 
     public init?(modelPath: String, configPath: String, espeakNGData: String, dataDir: String? = nil, g2pwModelDir: String? = nil) {
+        // Fail fast for missing model – mirrors options path and avoids espeak bundle work when doomed
+        if modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: modelPath) { return nil }
+
         let opts = PiperCreateOptions(modelPath: modelPath,
                                       configPath: configPath.isEmpty ? nil : configPath,
                                       espeakDataPath: espeakNGData.isEmpty ? nil : espeakNGData,

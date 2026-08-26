@@ -2,8 +2,13 @@ import Testing
 import Foundation
 @testable import piper_objc
 
-@Suite("PiperCreateOptions Tests")
+@Suite("PiperCreateOptions Tests", .serialized)
 struct PiperCreateOptionsTests {
+
+    init() {
+        // Ensure espeak-ng_data.bundle can be found in test runner (prevents NSException in EspeakLib)
+        Bundle.setupSwizzling()
+    }
 
     @Test("Init with only modelPath sets required field and nils optionals")
     func testInitWithOnlyModelPath() {
@@ -55,7 +60,9 @@ struct PiperCreateOptionsTests {
     @Test("PiperCreateOptions is NSObject subclass for ObjC interop")
     func testNSObjectInterop() {
         let opts = PiperCreateOptions(modelPath: "/tmp/model.onnx")
-        #expect(opts is NSObject)
+        // Use ObjC runtime check rather than 'is' (which is always true for NSObject subclass)
+        #expect(type(of: opts) == PiperCreateOptions.self)
+        #expect(opts.isKind(of: NSObject.self))
         // Ensure it can be used via KVC-style (ObjC runtime)
         let mirrorModelPath = (opts as NSObject).value(forKey: "modelPath") as? String
         #expect(mirrorModelPath == "/tmp/model.onnx")
@@ -117,8 +124,12 @@ struct PiperCreateOptionsTests {
     }
 }
 
-@Suite("Piper Create With Options – migration regression")
+@Suite("Piper Create With Options – migration regression", .serialized)
 struct PiperCreateWithOptionsMigrationTests {
+
+    init() {
+        Bundle.setupSwizzling()
+    }
 
     @Test("Piper recreates synthesizer using stored options (memory pressure path)")
     func testRecreateUsesStoredOptions() {
