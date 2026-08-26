@@ -77,6 +77,19 @@ public class Piper: NSObject {
     }
 
     private static func makeSynthesizer(modelPath: String, configPath: String, espeakData: String, dataDir: String? = nil, g2pwDir: String? = nil) -> OpaquePointer? {
+        // Guard against missing files – piper C++ throws on empty/missing config (nlohmann::json parse_error)
+        // and would abort the process. Return nil early for graceful Swift failure.
+        if modelPath.isEmpty { return nil }
+        if !FileManager.default.fileExists(atPath: modelPath) { return nil }
+        if !configPath.isEmpty {
+            if !FileManager.default.fileExists(atPath: configPath) { return nil }
+            // Empty file would cause json parse_error -> abort, treat as failure
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: configPath),
+               let size = attrs[.size] as? UInt64, size == 0 {
+                return nil
+            }
+        }
+
         var opts = piper_create_options()
         opts.struct_size = MemoryLayout<piper_create_options>.size
         opts.model_path = nil
@@ -111,11 +124,16 @@ public class Piper: NSObject {
 
     private static func makeSynthesizer(options: PiperCreateOptions) -> OpaquePointer? {
         // Resolve espeak path via same logic as init – ensure bundled data if nil/empty
-        let espeakPath = options.espeakDataPath?.isEmpty == false ? options.espeakDataPath : nil
+        let espeakPath: String
+        if let p = options.espeakDataPath, !p.isEmpty {
+            espeakPath = p
+        } else {
+            espeakPath = Piper.ensureEspeakLibDataInstalled()
+        }
         let configPath = options.configPath?.isEmpty == false ? options.configPath : nil
         return makeSynthesizer(modelPath: options.modelPath,
                                configPath: configPath ?? "",
-                               espeakData: espeakPath ?? "",
+                               espeakData: espeakPath,
                                dataDir: options.dataDir,
                                g2pwDir: options.g2pwModelDir)
     }
