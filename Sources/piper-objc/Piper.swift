@@ -419,9 +419,9 @@ public class Piper: NSObject {
         let lastIndex = speedCurve.count - 1
 
         if rate >= speedCurve[lastIndex].rate {
-            // Extrapolate beyond maximum (e.g., 200% = 2.0) – keep getting faster
-            let last = speedCurve[lastIndex]
-            return last.speed * (rate / last.rate)
+            // Clamp – do not extrapolate beyond 1.0. 1.0 = 3.944 is max.
+            // Extrapolation made 2.0 => 7.88x super fast (bug). Multiplier path handles >1.0.
+            return speedCurve[lastIndex].speed
         }
 
         var low = 0
@@ -449,8 +449,30 @@ public class Piper: NSObject {
     private func getOptions(for fragment: SSMLNode, speakerId: Int32) -> piper_synthesize_options {
         var options = piper_default_synthesize_options(synthesizer)
 
-        let speedRatio = Piper.speedRatio(for: fragment.lengthScale)
-        options.length_scale = max(0.1, min(1.0 / speedRatio, 10.0))
+        let rate = fragment.lengthScale
+        let lengthScale: Float
+
+        // Distinguish AV rate (0.2-1.0, 0.5 normal) vs multiplier (0.5-2.0, 1.0 normal)
+        // 1.0 is ambiguous: AV fastest (0.253) vs multiplier normal (1.0).
+        // Since Apple normal is 0.5, 1.0 as AV fastest is rare; treat 1.0 as multiplier normal for UI safety.
+        // AV path: 0.2 <= rate < 1.0  (0.5 -> 1.0 speed -> length 1.0)
+        // Multiplier path: rate ==1.0, rate <0.2, rate >1.0  (1/rate)
+        if rate >= 0.2 && rate < 1.0 {
+            let speedRatio = Piper.speedRatio(for: rate)
+            lengthScale = max(0.1, min(1.0 / speedRatio, 10.0))
+        } else if rate == 1.0 {
+            lengthScale = 1.0
+        } else {
+            // Multiplier path: 0.5 slow => 2.0, 1.5 fast => 0.666, 2.0 double => 0.5
+            // Also handles <0.2 and >1.0
+            if rate <= 0 {
+                lengthScale = 1.0
+            } else {
+                lengthScale = max(0.1, min(1.0 / rate, 10.0))
+            }
+        }
+
+        options.length_scale = lengthScale
         options.speaker_id = speakerId
 
         return options

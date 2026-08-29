@@ -153,4 +153,37 @@ struct SSMLParserTests {
         #expect(nodes[0].lengthScale == 0.5)
         #expect(nodes[0].text == "Slow")
     }
+
+    @Test("parses float multiplier rate like 1.0 and 0.5")
+    func testFloatMultiplierRates() {
+        let parser = SSMLParser()
+        var n1: [SSMLNode] = []
+        parser.parse(ssml: "<prosody rate=\"1.0\">Normal</prosody>") { n1.append($0) }
+        #expect(n1.count == 1)
+        #expect(abs(n1[0].lengthScale - 1.0) < 0.001, "1.0 multiplier should be 1.0")
+
+        var n2: [SSMLNode] = []
+        parser.parse(ssml: "<prosody rate=\"0.5\">Half</prosody>") { n2.append($0) }
+        #expect(n2.count == 1)
+        #expect(abs(n2[0].lengthScale - 0.5) < 0.001, "0.5 multiplier should be 0.5")
+
+        var n3: [SSMLNode] = []
+        parser.parse(ssml: "<prosody rate=\"2.0\">Double</prosody>") { n3.append($0) }
+        #expect(n3.count == 1)
+        #expect(abs(n3[0].lengthScale - 2.0) < 0.001, "2.0 multiplier should be 2.0")
+
+        var n4: [SSMLNode] = []
+        parser.parse(ssml: "<prosody rate=\"1.5\">Fast</prosody>") { n4.append($0) }
+        #expect(n4.count == 1)
+        #expect(abs(n4[0].lengthScale - 1.5) < 0.001)
+    }
+
+    @Test("plain text fallback returns 1.0 multiplier normal")
+    func testPlainTextFallback1x() {
+        let parser = SSMLParser()
+        var nodes: [SSMLNode] = []
+        parser.parse(ssml: "Hello world plain") { nodes.append($0) }
+        #expect(nodes.count == 1)
+        #expect(nodes[0].lengthScale == 1.0, "Plain text fallback should be 1.0 multiplier normal, not 0.5")
+    }
 }

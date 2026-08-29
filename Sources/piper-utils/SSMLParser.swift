@@ -140,9 +140,25 @@ private extension SSMLParser {
     func parseRate(_ value: String) -> Float {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasSuffix("%") {
-            let rateStr = trimmed.replacingOccurrences(of: "%", with: "")
+            let rateStr = trimmed.replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
             if let rate = Double(rateStr) {
                 return Float(rate / 100.0)
+            }
+        } else {
+            // Handle float multiplier like "1.0", "0.5", "2.0", "1"
+            if let rate = Float(trimmed) {
+                return rate
+            }
+            // Handle keywords – map to multiplier approximating Apple normal 0.5
+            // For fast follow-up, unknown -> 0.5 (AV normal) which maps to length 1.0
+            let lower = trimmed.lowercased()
+            switch lower {
+            case "x-slow": return 0.5  // slow multiplier
+            case "slow": return 0.75
+            case "medium": return 1.0
+            case "fast": return 1.5
+            case "x-fast": return 2.0
+            default: break
             }
         }
         return 0.5
