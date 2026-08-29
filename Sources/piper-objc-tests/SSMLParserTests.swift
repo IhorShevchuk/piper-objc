@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import piper_utils
 
@@ -9,8 +10,8 @@ struct SSMLParserTests {
         var nodes: [SSMLNode] = []
         parser.parse(ssml: "Hello world!") { nodes.append($0) }
         #expect(nodes.count == 1)
-        #expect(nodes[0].text == "Hello world!", "Node 0: \(nodes[0].text)")
-        #expect(nodes[0].lengthScale == 1.0, "Node 0 rate: \(nodes[0].lengthScale)")
+        #expect(nodes[0].text == "Hello world!")
+        #expect(nodes[0].lengthScale == 1.0)
     }
     
     @Test("parses prosody rate percent correctly")
@@ -19,8 +20,8 @@ struct SSMLParserTests {
         var nodes: [SSMLNode] = []
         parser.parse(ssml: "<prosody rate=\"150%\">Fast</prosody>") { nodes.append($0) }
         #expect(nodes.count == 1)
-        #expect(nodes[0].text == "Fast", "Node 0: \(nodes[0].text)")
-        #expect(nodes[0].lengthScale == 1.5, "Node 0 rate: \(nodes[0].lengthScale)")
+        #expect(nodes[0].text == "Fast")
+        #expect(nodes[0].lengthScale == 1.5)
     }
 
     @Test("handles nested prosody")
@@ -29,16 +30,16 @@ struct SSMLParserTests {
         let ssml = "<prosody rate=\"200%\">Very <prosody rate=\"50%\">slow</prosody> fast</prosody>"
         var nodes: [SSMLNode] = []
         parser.parse(ssml: ssml) { nodes.append($0) }
-        #expect(nodes.count == 3, "Node count: \(nodes.count)")
+        #expect(nodes.count == 3)
         // Node 0: "Very", rate=2.0
-        #expect(nodes[0].text.trimmingCharacters(in: .whitespacesAndNewlines) == "Very", "Node 0: \(nodes[0].text)")
-        #expect(abs(nodes[0].lengthScale - 2.0) < 0.01, "Node 0 rate: \(nodes[0].lengthScale)")
+        #expect(nodes[0].text.trimmingCharacters(in: .whitespacesAndNewlines) == "Very")
+        #expect(abs(nodes[0].lengthScale - 2.0) < 0.01)
         // Node 1: "slow", rate=0.5
-        #expect(nodes[1].text.trimmingCharacters(in: .whitespacesAndNewlines) == "slow", "Node 1: \(nodes[1].text)")
-        #expect(abs(nodes[1].lengthScale - 0.5) < 0.01, "Node 1 rate: \(nodes[1].lengthScale)")
+        #expect(nodes[1].text.trimmingCharacters(in: .whitespacesAndNewlines) == "slow")
+        #expect(abs(nodes[1].lengthScale - 0.5) < 0.01)
         // Node 2: " fast", rate=2.0
-        #expect(nodes[2].text.trimmingCharacters(in: .whitespacesAndNewlines) == "fast", "Node 2: \(nodes[2].text)")
-        #expect(abs(nodes[2].lengthScale - 2.0) < 0.01, "Node 2 rate: \(nodes[2].lengthScale)")
+        #expect(nodes[2].text.trimmingCharacters(in: .whitespacesAndNewlines) == "fast")
+        #expect(abs(nodes[2].lengthScale - 2.0) < 0.01)
     }
     
     @Test("handles French prosody inside speak tag")
@@ -47,16 +48,16 @@ struct SSMLParserTests {
         let ssml = "<speak>L’élève <prosody rate=\"100%\">écoute</prosody> bien.</speak>"
         var nodes: [SSMLNode] = []
         parser.parse(ssml: ssml) { nodes.append($0) }
-        #expect(nodes.count == 3, "Node count: \(nodes.count)")
+        #expect(nodes.count == 3)
         // Node 0: "L’élève", rate=1.0
-        #expect(nodes[0].text.trimmingCharacters(in: .whitespacesAndNewlines) == "L’élève", "Node 0: \(nodes[0].text)")
-        #expect(abs(nodes[0].lengthScale - 0.5) < 0.01, "Node 0 rate: \(nodes[0].lengthScale)")
+        #expect(nodes[0].text.trimmingCharacters(in: .whitespacesAndNewlines) == "L’élève")
+        #expect(abs(nodes[0].lengthScale - 0.5) < 0.01)
         // Node 1: "écoute", rate=0.5
-        #expect(nodes[1].text.trimmingCharacters(in: .whitespacesAndNewlines) == "écoute", "Node 1: \(nodes[1].text)")
-        #expect(abs(nodes[1].lengthScale - 1.0) < 0.01, "Node 1 rate: \(nodes[1].lengthScale)")
+        #expect(nodes[1].text.trimmingCharacters(in: .whitespacesAndNewlines) == "écoute")
+        #expect(abs(nodes[1].lengthScale - 1.0) < 0.01)
         // Node 2: " bien.", rate=1.0
-        #expect(nodes[2].text.trimmingCharacters(in: .whitespacesAndNewlines) == "bien.", "Node 2: \(nodes[2].text)")
-        #expect(abs(nodes[2].lengthScale - 0.5) < 0.01, "Node 2 rate: \(nodes[2].lengthScale)")
+        #expect(nodes[2].text.trimmingCharacters(in: .whitespacesAndNewlines) == "bien.")
+        #expect(abs(nodes[2].lengthScale - 0.5) < 0.01)
     }
 
     @Test("returns empty for malformed or empty input")
@@ -72,8 +73,8 @@ struct SSMLParserTests {
         var n2: [SSMLNode] = []
         parser.parse(ssml: "<prosody rate=\"abc\">text</prosody>") { n2.append($0) }
         #expect(n2.count == 1)
-        #expect(n2[0].text == "text", "Node text: \(n2[0].text)")
-        #expect(n2[0].lengthScale == 0.5, "Node rate: \(n2[0].lengthScale)")
+        #expect(n2[0].text == "text")
+        #expect(n2[0].lengthScale == 0.5)
     }
 
     @Test("handles XML entities correctly")

@@ -1,5 +1,7 @@
+import Foundation
 import Testing
 @testable import piper_objc
+@testable import piper_utils
 
 @Suite("Piper Speed Curve Tests")
 struct PiperSpeedCurveTests {
@@ -17,9 +19,9 @@ struct PiperSpeedCurveTests {
         // Bug fix: 1.0.10 extrapolated 2.0 -> 7.88x super fast. Now clamp.
         // 1.1 and 2.0 should both return 3.9443088883 max.
         let speed11 = Piper.speedRatio(for: 1.1)
-        #expect(speed11 == 3.9443088883, "Speed for 1.1 should clamp to max, got \(speed11)")
+        #expect(speed11 == 3.9443088883)
         let speed20 = Piper.speedRatio(for: 2.0)
-        #expect(speed20 == 3.9443088883, "Speed for 2.0 should clamp to max, got \(speed20)")
+        #expect(speed20 == 3.9443088883)
     }
 
     // MARK: - Fast follow-up TDD: base 1.0x normal not fast
@@ -91,7 +93,9 @@ struct PiperSpeedCurveTests {
         #expect(markers.count >= 3)
         // Byte offsets monotonic increasing
         for i in 1..<markers.count {
-            #expect(markers[i].byteOffset >= markers[i-1].byteOffset, "Markers should be monotonic: \(markers[i-1].byteOffset) -> \(markers[i].byteOffset)")
+            let prev = markers[i-1].byteOffset
+            let curr = markers[i].byteOffset
+            #expect(curr >= prev)
         }
     }
 
@@ -137,7 +141,7 @@ struct PiperSpeedCurveTests {
         let actualSpeed = Piper.speedRatio(for: 0.525)
         let tolerance: Float = 0.00001
         
-        #expect(abs(actualSpeed - Float(expectedSpeed)) < tolerance, "Speed should be linearly interpolated. Expected \(expectedSpeed), got \(actualSpeed).")
+        #expect(abs(actualSpeed - Float(expectedSpeed)) < tolerance)
     }
 
     @Test("Rate of zero returns first speed")
@@ -157,7 +161,7 @@ struct PiperSpeedCurveTests {
         let actualSpeed = Piper.speedRatio(for: 0.87)
         let tolerance: Float = 0.00001
         
-        #expect(abs(actualSpeed - expectedSpeed) < tolerance, "Speed should be linearly interpolated. Expected \(expectedSpeed), got \(actualSpeed).")
+        #expect(abs(actualSpeed - expectedSpeed) < tolerance)
     }
 
     @Test("Rate very close to a data point interpolates correctly")
@@ -169,6 +173,6 @@ struct PiperSpeedCurveTests {
         let expectedSpeed = lower.speed + progress * (upper.speed - lower.speed)
         let actualSpeed = Piper.speedRatio(for: 0.4001)
         let tolerance: Float = 0.00001
-        #expect(abs(actualSpeed - expectedSpeed) < tolerance, "Interpolation for a rate very close to a point should be correct. Expected \(expectedSpeed), got \(actualSpeed).")
+        #expect(abs(actualSpeed - expectedSpeed) < tolerance)
     }
 }
