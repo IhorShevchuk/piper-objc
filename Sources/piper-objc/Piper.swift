@@ -521,7 +521,8 @@ public class Piper: NSObject {
                 if piper_synthesize_start(synthesizer, sentence, &currentOptions) == PIPER_ERR_GENERIC {
                     // Sawyer 1.0.12 YouTube long post: one bad sentence (emoji/URL) aborted remaining 10+ sentences.
                     // Skip failed sentence instead of aborting entire long utterance.
-                    continue
+                    // NOTE: inside autoreleasepool closure, `return` exits closure and for-loop proceeds to next sentence
+                    return
                 }
                 
                 var sentenceTotalBytes = 0
