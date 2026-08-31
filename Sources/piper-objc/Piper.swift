@@ -519,7 +519,9 @@ public class Piper: NSObject {
                 let sentenceStartByteOffset = self.totalSSMLBytesGenerated
                 
                 if piper_synthesize_start(synthesizer, sentence, &currentOptions) == PIPER_ERR_GENERIC {
-                    status = .error
+                    // Sawyer 1.0.12 YouTube long post: one bad sentence (emoji/URL) aborted remaining 10+ sentences.
+                    // Skip failed sentence instead of aborting entire long utterance.
+                    // NOTE: inside autoreleasepool closure, `return` exits closure and for-loop proceeds to next sentence
                     return
                 }
                 
@@ -530,7 +532,8 @@ public class Piper: NSObject {
                 repeat {
                     piperStatus = piper_synthesize_next(synthesizer, &chunk)
                     if piperStatus == PIPER_ERR_GENERIC {
-                        status = .error
+                        // Skip this sentence's remainder, continue to next sentence for long utterance resilience
+                        break
                     }
                     if status != .rendering { return }
                     if chunk.num_samples == 0 {

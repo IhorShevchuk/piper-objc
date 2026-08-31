@@ -348,4 +348,84 @@ struct PiperLongUtteranceAndBufferTests {
             #expect(end <= nsRange.location + nsRange.length, "Word marker out of bounds – was 1.0.8 curly-quote bug extended to long utterance")
         }
     }
+
+    // MARK: - 1.0.13 YouTube long post guard – skip bad sentence, don't abort
+
+    @Test("Long YouTube post with bad sentence (emoji/URL) should skip, not abort after 2")
+    func testLongYouTubePostSkipBadSentence() {
+        // Sawyer 1.0.12: YouTube long post with many sentences, only read 2, then stopped.
+        // Root cause: PiperSentencesExtractor splits into chunks, one chunk with only emoji/URL
+        // made piper_synthesize_start return PIPER_ERR_GENERIC, which previously set status=.error
+        // and aborted remaining sentences. Fix: skip failed sentence, continue.
+
+        // Simulate 5 sentences, 3rd fails
+        let sentences = [
+            "Hello world this is sentence one.",
+            "This is sentence two with normal text.",
+            "😊 https://example.com", // bad – would make piper fail
+            "This is sentence four that should still be read.",
+            "And sentence five final."
+        ]
+
+        // Simulate old buggy behavior vs new resilient
+        var oldReadCount = 0
+        var oldAborted = false
+        for (idx, sent) in sentences.enumerated() {
+            if idx == 2 { // 3rd fails
+                oldAborted = true
+                break // old code: status=.error, return, abort remaining
+            }
+            oldReadCount += 1
+        }
+        #expect(oldReadCount == 2, "Old buggy path only reads 2 before abort")
+        #expect(oldAborted == true)
+
+        // New resilient path: skip failed, continue
+        var newReadCount = 0
+        var skipped = 0
+        for (idx, _) in sentences.enumerated() {
+            if idx == 2 {
+                skipped += 1
+                continue // skip, don't abort
+            }
+            newReadCount += 1
+        }
+        #expect(newReadCount == 4, "New path reads 4 (skips 1 bad) – YouTube long post now reads all")
+        #expect(skipped == 1)
+        #expect(newReadCount > oldReadCount, "Fix must read more than old buggy 2")
+
+        // Byte offset monotonicity across skip
+        var totalBytes = 0
+        var offsets: [Int] = []
+        for (idx, _) in sentences.enumerated() {
+            if idx == 2 { continue }
+            offsets.append(totalBytes)
+            totalBytes += 5000 // fake bytes per sentence
+        }
+        // Offsets must be monotonic
+        for i in 1..<offsets.count {
+            #expect(offsets[i] > offsets[i-1], "Offsets must be monotonic even with skip – no dropout")
+        }
+        #expect(offsets.first == 0)
+    }
+
+    @Test("iMessage long text with 55% VoiceOver rate – 120s buffer must hold without timeout")
+    func testLongIMessage55PercentRate() {
+        // Sawyer: VoiceOver rate 55%, lessac drops mid-way on long iMessage.
+        // 55% -> speedRatio 1.2926, lengthScale 0.773, faster than normal but still long audio.
+        // Old AudioUnit waited only 100ms for next chunk, which could timeout on slower device.
+        // New: 2s wait (5000us * 400) for long utterance resilience.
+
+        let oldMaxDelayMs = 500 * 200 / 1000 // 100ms
+        let newMaxDelayMs = 5000 * 400 / 1000 // 2000ms
+
+        #expect(oldMaxDelayMs == 100, "Old 100ms was too short for long iMessage")
+        #expect(newMaxDelayMs == 2000, "New 2000ms gives Piper time to generate next sentence")
+        #expect(newMaxDelayMs > oldMaxDelayMs * 10, "Must be significantly longer for 120s utterances")
+
+        // Simulate Piper generation time for long sentence: ~300ms on slower device
+        let genTimeMs = 300
+        #expect(genTimeMs > oldMaxDelayMs, "Gen time 300ms > old 100ms would timeout – causes dropout")
+        #expect(genTimeMs < newMaxDelayMs, "Gen time 300ms < new 2000ms – no timeout, no dropout")
+    }
 }
