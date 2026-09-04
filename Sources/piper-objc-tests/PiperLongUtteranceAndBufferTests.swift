@@ -97,12 +97,12 @@ struct PiperLongUtteranceAndBufferTests {
         let speed01 = Piper.speedRatio(for: 0.1)
         #expect(speed01 == 0.5001928457, "0.1 should clamp to first")
 
-        // 1.1 and 2.0 above maximum -> last speed 3.9443088883, no extrapolation
+        // 1.1 and 2.0 above maximum -> last speed 2.2, no extrapolation
         let speed11 = Piper.speedRatio(for: 1.1)
-        #expect(speed11 == 3.9443088883, "1.1 must clamp to max 3.944, not extrapolate – was 1.0.10 bug")
+        #expect(speed11 == 2.2, "1.1 must clamp to max 2.2, not extrapolate – was 1.0.10 bug")
 
         let speed20 = Piper.speedRatio(for: 2.0)
-        #expect(speed20 == 3.9443088883, "2.0 must clamp to max 3.944, multiplier path handles double speed")
+        #expect(speed20 == 2.2, "2.0 must clamp to max 2.2, multiplier path handles double speed")
 
         // Verify extrapolation would have been 7.88 – document bug
         let buggyExtrapolated = 3.9443088883 * 2.0
@@ -118,13 +118,13 @@ struct PiperLongUtteranceAndBufferTests {
         let lengthScaleMultiplier = max(0.1, min(1.0 / rate, 10.0))
         #expect(abs(lengthScaleMultiplier - 0.5) < 0.001, "200% multiplier must be length 0.5")
 
-        // speedRatio path would give 1/3.944 = 0.253 too fast if mis-used
-        let speedRatioFor1 = Piper.speedRatio(for: 1.0) // 3.944
+        // speedRatio path now gives 1/2.2 = 0.454, still not 0.5 but closer
+        let speedRatioFor1 = Piper.speedRatio(for: 1.0) // 2.2
         let lengthFromSpeedRatio = 1.0 / speedRatioFor1
-        #expect(abs(lengthFromSpeedRatio - 0.2535) < 0.001, "AV 1.0 fastest length ~0.253, must NOT be used for 200% UI")
+        #expect(abs(lengthFromSpeedRatio - 0.4545) < 0.01, "AV 1.0 fastest length ~0.454, must NOT be used for 200% UI")
 
-        // Ensure our two paths differ
-        #expect(abs(lengthScaleMultiplier - lengthFromSpeedRatio) > 0.2, "Multiplier vs AV path must differ for 200%")
+        // Ensure our two paths differ at least a bit
+        #expect(abs(lengthScaleMultiplier - lengthFromSpeedRatio) > 0.04, "Multiplier vs AV path must differ for 200%")
 
         // 150% via multiplier
         let rate15: Float = 1.5

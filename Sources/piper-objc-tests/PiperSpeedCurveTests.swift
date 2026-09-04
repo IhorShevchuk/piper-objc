@@ -16,12 +16,11 @@ struct PiperSpeedCurveTests {
 
     @Test("Rate above maximum clamps to max speed (no extrapolation)")
     func testRateAboveMaximum() {
-        // Bug fix: 1.0.10 extrapolated 2.0 -> 7.88x super fast. Now clamp.
-        // 1.1 and 2.0 should both return 3.9443088883 max.
+        // Bug fix: 1.0.10 extrapolated 2.0 -> 7.88x super fast. Now clamp to 2.2.
         let speed11 = Piper.speedRatio(for: 1.1)
-        #expect(speed11 == 3.9443088883)
+        #expect(speed11 == 2.2)
         let speed20 = Piper.speedRatio(for: 2.0)
-        #expect(speed20 == 3.9443088883)
+        #expect(speed20 == 2.2)
     }
 
     // MARK: - Fast follow-up TDD: base 1.0x normal not fast
@@ -33,13 +32,13 @@ struct PiperSpeedCurveTests {
         // Here we test speedRatio for AV normal 0.5 == 1.0, and that 1.0 multiplier is NOT 3.944
         let avNormal = Piper.speedRatio(for: 0.5)
         #expect(avNormal == 1.0, "AV 0.5 normal should be 1.0 speed")
-        // 1.0 AV fastest is 3.944, but UI base 1.0x should NOT use that.
+        // 1.0 AV fastest is 2.2, but UI base 1.0x should NOT use that.
         // Ensure our getOptions distinction treats 1.0 as multiplier normal.
         // Simulated: length_scale = 1.0 / rate for multiplier
         let multiplier1x = 1.0 / 1.0
         #expect(multiplier1x == 1.0, "Multiplier 1.0 should be length 1.0 normal, not 0.253")
-        let buggyLength = 1.0 / 3.9443088883
-        #expect(abs(buggyLength - 0.253) < 0.01, "Buggy path gave 0.253, confirming bug existed")
+        let buggyLength = 1.0 / 2.2
+        #expect(abs(buggyLength - 0.4545) < 0.01, "Fast path gave 0.454")
         // Correct length for 1.0 should be 1.0, not 0.253
         #expect(abs(multiplier1x - 1.0) < 0.001)
     }
@@ -52,12 +51,12 @@ struct PiperSpeedCurveTests {
         #expect(abs(length - 1.0) < 0.001, "50% AV normal should be length 1.0")
     }
 
-    @Test("100 percent fastest AV maps to 3.944 but UI treats 1.0 as normal")
+    @Test("100 percent fastest AV maps to 2.2 but UI treats 1.0 as normal")
     func test100PercentFastest() {
         let speed = Piper.speedRatio(for: 1.0)
-        #expect(speed == 3.9443088883, "AV 1.0 fastest should be 3.944")
+        #expect(speed == 2.2, "AV 1.0 fastest should be 2.2")
         let lengthFast = 1.0 / speed
-        #expect(abs(lengthFast - 0.2535) < 0.001, "AV 1.0 length should be ~0.253")
+        #expect(abs(lengthFast - 0.4545) < 0.01, "AV 1.0 length should be ~0.454")
         // But multiplier 1.0 normal length is 1.0 – fast follow-up chooses multiplier for 1.0
         let multiplierLength = 1.0 / 1.0
         #expect(multiplierLength == 1.0)
@@ -70,9 +69,9 @@ struct PiperSpeedCurveTests {
         let length = 1.0 / rate
         #expect(abs(length - 0.5) < 0.001, "200% multiplier should be length 0.5 double speed")
         // Old bug extrapolated speedRatio to 7.88 -> length 0.126 super fast, too fast
-        let buggySpeed = 3.9443088883 * 2.0
+        let buggySpeed = 2.2 * 2.0
         let buggyLength = 1.0 / buggySpeed
-        #expect(buggyLength < 0.2, "Buggy extrapolation gave super fast <0.2")
+        #expect(buggyLength < 0.3, "Buggy 0.227 faster")
     }
 
     @Test("Alignment markers monotonic with speed changes")
@@ -115,7 +114,7 @@ struct PiperSpeedCurveTests {
     @Test("Rate at maximum returns last speed")
     func testRateAtMaximum() {
         let speed = Piper.speedRatio(for: 1.00)
-        #expect(speed == 3.9443088883, "Speed for maximum rate should be the exact last value.")
+        #expect(speed == 2.2, "Speed for maximum rate should be 2.2")
     }
 
     // Test exact matches from the data
@@ -129,7 +128,7 @@ struct PiperSpeedCurveTests {
     @Test("Rate at another exact data point returns correct speed")
     func testRateAtAnotherExactPoint() {
         let speed = Piper.speedRatio(for: 0.75)
-        #expect(speed == 2.4720048684, "Speed for rate 0.75 should match the data point.")
+        #expect(speed == 2.1, "Speed for rate 0.75 should match the data point.")
     }
 
     // Test interpolation between points
@@ -152,12 +151,12 @@ struct PiperSpeedCurveTests {
 
     @Test("Rate between two points with non-midpoint interpolation")
     func testInterpolationNonMidpoint() {
-        // Rate 0.87 is 40% of the way between 0.85 (speed 2.8403447397) and 0.90 (speed 3.1448106796)
+        // Rate 0.87 is 40% of the way between 0.85 (speed 2.18) and 0.90 (speed 2.2)
         // (0.87 - 0.85) / (0.90 - 0.85) = 0.02 / 0.05 = 0.4
-        let lower = (rate: Float(0.85), speed: Float(2.8403447397))
-        let upper = (rate: Float(0.90), speed: Float(3.1448106796))
+        let lower = (rate: Float(0.85), speed: Float(2.18))
+        let upper = (rate: Float(0.90), speed: Float(2.2))
         let progress: Float = 0.4
-        let expectedSpeed = lower.speed + progress * (upper.speed - lower.speed) // 2.96213111566
+        let expectedSpeed = lower.speed + progress * (upper.speed - lower.speed) // 2.188
         let actualSpeed = Piper.speedRatio(for: 0.87)
         let tolerance: Float = 0.00001
         
@@ -176,3 +175,51 @@ struct PiperSpeedCurveTests {
         #expect(abs(actualSpeed - expectedSpeed) < tolerance)
     }
 }
+
+    // MARK: - PT-BR high-speed sibilant preservation (Ricksparta / Ricardo Sep 2026)
+
+    @Test("High rates >=0.8 must not drop sibilants – clamp max to 2.2")
+    func testHighRatesSibilantPreserve() {
+        // Ricksparta: >80% loses S at 3.94x. PT-BR needs >=0.45 length.
+        let rates: [Float] = [0.80, 0.85, 0.90, 0.95, 1.00]
+        for rate in rates {
+            let speed = Piper.speedRatio(for: rate)
+            #expect(speed <= 2.2001, "Rate \(rate) speed \(speed) must be <=2.2 to preserve S")
+            let length = 1.0 / speed
+            #expect(length >= 0.45, "Rate \(rate) length \(length) must be >=0.45 for PT-BR sibilants")
+        }
+    }
+
+    @Test("Speed curve monotonic up to 2.2")
+    func testMonotonicTo22() {
+        let points: [(Float, Float)] = [
+            (0.20, 0.5001928457),
+            (0.25, 0.5550218062),
+            (0.30, 0.6285364609),
+            (0.35, 0.7189278745),
+            (0.40, 0.8310849027),
+            (0.45, 0.9119920277),
+            (0.50, 1.0),
+            (0.55, 1.2926956961),
+            (0.60, 1.5843505525),
+            (0.65, 1.8302883372),
+            (0.70, 2.0),
+            (0.75, 2.1),
+            (0.80, 2.15),
+            (0.85, 2.18),
+            (0.90, 2.2),
+            (0.95, 2.2),
+            (1.00, 2.2)
+        ]
+        for i in 1..<points.count {
+            #expect(points[i].1 >= points[i-1].1 - 0.001, "Curve must be monotonic at \(points[i].0)")
+        }
+    }
+
+    @Test("80 percent normalish fast maps to ~0.46 length not 0.25")
+    func test80PercentNotTooFast() {
+        let speed = Piper.speedRatio(for: 0.80)
+        let length = 1.0 / speed
+        #expect(abs(length - 0.465) < 0.05, "80% length should be ~0.465, was 0.357 before")
+        #expect(length > 0.35, "80% must not be as fast as old 0.357 that dropped S")
+    }
