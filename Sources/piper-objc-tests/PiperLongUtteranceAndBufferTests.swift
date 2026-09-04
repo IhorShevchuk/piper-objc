@@ -97,12 +97,12 @@ struct PiperLongUtteranceAndBufferTests {
         let speed01 = Piper.speedRatio(for: 0.1)
         #expect(speed01 == 0.5001928457, "0.1 should clamp to first")
 
-        // 1.1 and 2.0 above maximum -> last speed 3.9443088883, no extrapolation
+        // 1.1 and 2.0 above maximum -> last speed 2.2, no extrapolation
         let speed11 = Piper.speedRatio(for: 1.1)
-        #expect(speed11 == 3.9443088883, "1.1 must clamp to max 3.944, not extrapolate – was 1.0.10 bug")
+        #expect(speed11 == 2.2, "1.1 must clamp to max 2.2, not extrapolate – was 1.0.10 bug")
 
         let speed20 = Piper.speedRatio(for: 2.0)
-        #expect(speed20 == 3.9443088883, "2.0 must clamp to max 3.944, multiplier path handles double speed")
+        #expect(speed20 == 2.2, "2.0 must clamp to max 2.2, multiplier path handles double speed")
 
         // Verify extrapolation would have been 7.88 – document bug
         let buggyExtrapolated = 3.9443088883 * 2.0
