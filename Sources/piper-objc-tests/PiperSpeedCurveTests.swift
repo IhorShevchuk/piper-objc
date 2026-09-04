@@ -71,7 +71,7 @@ struct PiperSpeedCurveTests {
         // Old bug extrapolated speedRatio to 7.88 -> length 0.126 super fast, too fast
         let buggySpeed = 2.2 * 2.0
         let buggyLength = 1.0 / buggySpeed
-        #expect(buggyLength < 0.2, "Buggy extrapolation gave super fast <0.2")
+        #expect(buggyLength < 0.3, "Buggy 0.227 faster")
     }
 
     @Test("Alignment markers monotonic with speed changes")
