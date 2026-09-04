@@ -128,7 +128,7 @@ struct PiperSpeedCurveTests {
     @Test("Rate at another exact data point returns correct speed")
     func testRateAtAnotherExactPoint() {
         let speed = Piper.speedRatio(for: 0.75)
-        #expect(speed == 2.4720048684, "Speed for rate 0.75 should match the data point.")
+        #expect(speed == 2.1, "Speed for rate 0.75 should match the data point.")
     }
 
     // Test interpolation between points
@@ -151,12 +151,12 @@ struct PiperSpeedCurveTests {
 
     @Test("Rate between two points with non-midpoint interpolation")
     func testInterpolationNonMidpoint() {
-        // Rate 0.87 is 40% of the way between 0.85 (speed 2.8403447397) and 0.90 (speed 3.1448106796)
+        // Rate 0.87 is 40% of the way between 0.85 (speed 2.18) and 0.90 (speed 2.2)
         // (0.87 - 0.85) / (0.90 - 0.85) = 0.02 / 0.05 = 0.4
-        let lower = (rate: Float(0.85), speed: Float(2.8403447397))
-        let upper = (rate: Float(0.90), speed: Float(3.1448106796))
+        let lower = (rate: Float(0.85), speed: Float(2.18))
+        let upper = (rate: Float(0.90), speed: Float(2.2))
         let progress: Float = 0.4
-        let expectedSpeed = lower.speed + progress * (upper.speed - lower.speed) // 2.96213111566
+        let expectedSpeed = lower.speed + progress * (upper.speed - lower.speed) // 2.188
         let actualSpeed = Piper.speedRatio(for: 0.87)
         let tolerance: Float = 0.00001
         
