@@ -68,23 +68,27 @@ struct PiperCreateOptionsTests {
         #expect(mirrorModelPath == "/tmp/model.onnx")
     }
 
-    @Test("Piper init with invalid model returns nil (options path)")
-    func testPiperInitWithInvalidOptionsReturnsNil() {
+    @Test("Piper init with invalid model throws modelFileMissing (options path)")
+    func testPiperInitWithInvalidOptionsThrows() {
+        let modelPath = "/nonexistent/path/model.onnx"
         let opts = PiperCreateOptions(
-            modelPath: "/nonexistent/path/model.onnx",
+            modelPath: modelPath,
             configPath: "/nonexistent/path/model.onnx.json",
             espeakDataPath: "/tmp",
             dataDir: nil,
             g2pwModelDir: nil
         )
-        let piper = Piper(options: opts)
-        #expect(piper == nil, "Piper should fail to init with nonexistent model")
+        #expect(throws: PiperError(code: .modelFileMissing, path: modelPath)) {
+            try Piper(options: opts)
+        }
     }
 
-    @Test("Piper init with legacy 3-arg still works and fails gracefully on invalid path")
-    func testLegacyInitInvalidPath() {
-        let piper = Piper(modelPath: "/no/such/model.onnx", configPath: "/no/such/model.onnx.json", espeakNGData: "")
-        #expect(piper == nil)
+    @Test("Piper init with legacy args throws modelFileMissing on invalid path")
+    func testLegacyInitInvalidPathThrows() {
+        let modelPath = "/no/such/model.onnx"
+        #expect(throws: PiperError(code: .modelFileMissing, path: modelPath)) {
+            try Piper(modelPath: modelPath, configPath: "/no/such/model.onnx.json", espeakNGData: "")
+        }
     }
 
     @Test("Options with empty strings are treated as nil for default fallback")
@@ -96,9 +100,11 @@ struct PiperCreateOptionsTests {
         #expect(opts.espeakDataPath == "")
         #expect(opts.dataDir == "")
         #expect(opts.g2pwModelDir == "")
-        // Piper init should still attempt and fail gracefully (not crash) – it will resolve empty to auto-discovery
-        let piper = Piper(options: opts)
-        #expect(piper == nil, "Should still be nil for nonexistent model, but not crash on empty strings")
+        // Piper init throws a structured error instead of returning nil – empty strings
+        // still resolve to auto-discovery, but the missing model is reported, not a crash.
+        #expect(throws: PiperError(code: .modelFileMissing, path: "/tmp/model.onnx")) {
+            try Piper(options: opts)
+        }
     }
 
     @Test("DataDir and g2pwModelDir enable Chinese pinyin auto-discovery path")

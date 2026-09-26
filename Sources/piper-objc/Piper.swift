@@ -99,19 +99,29 @@ public class Piper: NSObject {
         return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
     }
 
-    private static func makeSynthesizer(modelPath: String, configPath: String, espeakData: String, dataDir: String? = nil, g2pwDir: String? = nil) -> OpaquePointer? {
-        // Guard against missing files – piper C++ throws on empty/missing config (nlohmann::json parse_error)
-        // and would abort the process. Return nil early for graceful Swift failure.
-        if modelPath.isEmpty { return nil }
-        if !FileManager.default.fileExists(atPath: modelPath) { return nil }
-        if !configPath.isEmpty {
-            if !FileManager.default.fileExists(atPath: configPath) { return nil }
-            // Empty file would cause json parse_error -> abort, treat as failure
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: configPath),
-               let size = attrs[.size] as? UInt64, size == 0 {
-                return nil
-            }
+    /// Validates creation inputs before touching the native engine.
+    /// Throws ``PiperError`` describing the first problem found.
+    private static func validateCreationInputs(modelPath: String, configPath: String?) throws {
+        if modelPath.isEmpty {
+            throw PiperError(code: .modelPathMissing)
         }
+        if !FileManager.default.fileExists(atPath: modelPath) {
+            throw PiperError(code: .modelFileMissing, path: modelPath)
+        }
+        guard let configPath, !configPath.isEmpty else { return }
+        if !FileManager.default.fileExists(atPath: configPath) {
+            throw PiperError(code: .configFileMissing, path: configPath)
+        }
+        // Guard against empty config – piper C++ throws on empty config
+        // (nlohmann::json parse_error) and would abort the process.
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: configPath),
+           let size = attrs[.size] as? UInt64, size == 0 {
+            throw PiperError(code: .configFileInvalid, path: configPath)
+        }
+    }
+
+    private static func makeSynthesizer(modelPath: String, configPath: String?, espeakData: String, dataDir: String? = nil, g2pwDir: String? = nil) throws -> OpaquePointer {
+        try validateCreationInputs(modelPath: modelPath, configPath: configPath)
 
         var opts = piper_create_options()
         opts.struct_size = MemoryLayout<piper_create_options>.size
@@ -126,7 +136,7 @@ public class Piper: NSObject {
             return s.withCString { body($0) }
         }
 
-        return withOptionalCString(modelPath) { modelC in
+        let synthesizer = withOptionalCString(modelPath) { modelC in
             withOptionalCString(configPath) { configC in
                 withOptionalCString(espeakData) { espeakC in
                     withOptionalCString(dataDir) { dataDirC in
@@ -143,13 +153,16 @@ public class Piper: NSObject {
                 }
             }
         }
+        guard let synthesizer else {
+            throw PiperError(code: .engineCreationFailed, path: modelPath)
+        }
+        return synthesizer
     }
 
-    private static func makeSynthesizer(options: PiperCreateOptions) -> OpaquePointer? {
+    private static func makeSynthesizer(options: PiperCreateOptions) throws -> OpaquePointer {
         // Early exit for missing model – avoid triggering espeak bundle installation (which can
         // throw NSException in test runners) when we already know we will fail.
-        if options.modelPath.isEmpty { return nil }
-        if !FileManager.default.fileExists(atPath: options.modelPath) { return nil }
+        try validateCreationInputs(modelPath: options.modelPath, configPath: options.configPath)
 
         // Resolve espeak path via same logic as init – ensure bundled data if nil/empty
         let espeakPath: String
@@ -159,17 +172,21 @@ public class Piper: NSObject {
             espeakPath = Piper.ensureEspeakLibDataInstalled()
         }
         let configPath = options.configPath?.isEmpty == false ? options.configPath : nil
-        return makeSynthesizer(modelPath: options.modelPath,
-                               configPath: configPath ?? "",
-                               espeakData: espeakPath,
-                               dataDir: options.dataDir,
-                               g2pwDir: options.g2pwModelDir)
+        return try makeSynthesizer(modelPath: options.modelPath,
+                                   configPath: configPath,
+                                   espeakData: espeakPath,
+                                   dataDir: options.dataDir,
+                                   g2pwDir: options.g2pwModelDir)
     }
 
     func recreateSynthesizer() {
         dispatchPrecondition(condition: .onQueue(dispatchQueue))
         releaseSynthesizer()
-        synthesizer = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir)
+        synthesizer = try? Self.makeSynthesizer(modelPath: modelPath,
+                                                configPath: configPath.isEmpty ? nil : configPath,
+                                                espeakData: espeakData,
+                                                dataDir: dataDir,
+                                                g2pwDir: g2pwModelDir)
     }
     
     private func releaseSynthesizer() {
@@ -181,17 +198,22 @@ public class Piper: NSObject {
         synthesizer = nil
     }
 
-    public convenience init?(modelPath: String, andConfigPath modelConfigPath: String) {
-        self.init(modelPath: modelPath, configPath: modelConfigPath, espeakNGData: "", dataDir: nil, g2pwModelDir: nil)
+    public convenience init(modelPath: String, andConfigPath modelConfigPath: String) throws {
+        try self.init(modelPath: modelPath,
+                      configPath: modelConfigPath,
+                      espeakNGData: "",
+                      dataDir: nil,
+                      g2pwModelDir: nil)
     }
 
     /// Designated initializer using options object – preferred path for piper_create_with_options migration.
     /// This is the ObjC-friendly entry point that mirrors piper_create_options versioning.
-    @objc public init?(options: PiperCreateOptions) {
+    /// Throws ``PiperError`` (bridged to `NSError` with domain `PiperError/domain`) on failure.
+    /// In Objective-C this imports as `initWithOptions:error:`.
+    @objc public init(options: PiperCreateOptions) throws {
         // Fail fast for missing model – avoids triggering espeak bundle installation (which can
         // throw NSException in test runners) when we know init will fail anyway.
-        if options.modelPath.isEmpty { return nil }
-        if !FileManager.default.fileExists(atPath: options.modelPath) { return nil }
+        try Self.validateCreationInputs(modelPath: options.modelPath, configPath: options.configPath)
 
         let espeakResolved = options.espeakDataPath?.isEmpty == false ? options.espeakDataPath! : Piper.ensureEspeakLibDataInstalled()
         self.modelPath = options.modelPath
@@ -202,18 +224,14 @@ public class Piper: NSObject {
         super.init()
         self.operationQueue.name = "\(type(of: self))Queue"
 
-        guard let syn = Self.makeSynthesizer(options: options) else {
-            return nil
-        }
-        self.synthesizer = syn
+        self.synthesizer = try Self.makeSynthesizer(options: options)
         self.status = .created
         setupMemoryPressureMonitoring()
     }
 
-    public init?(modelPath: String, configPath: String, espeakNGData: String, dataDir: String? = nil, g2pwModelDir: String? = nil) {
+    public init(modelPath: String, configPath: String, espeakNGData: String, dataDir: String? = nil, g2pwModelDir: String? = nil) throws {
         // Fail fast for missing model – mirrors options path and avoids espeak bundle work when doomed
-        if modelPath.isEmpty { return nil }
-        if !FileManager.default.fileExists(atPath: modelPath) { return nil }
+        try Self.validateCreationInputs(modelPath: modelPath, configPath: configPath.isEmpty ? nil : configPath)
 
         let opts = PiperCreateOptions(modelPath: modelPath,
                                       configPath: configPath.isEmpty ? nil : configPath,
@@ -227,11 +245,8 @@ public class Piper: NSObject {
         self.g2pwModelDir = g2pwModelDir
         super.init()
         self.operationQueue.name = "\(type(of: self))Queue"
-        
-        guard let syn = Self.makeSynthesizer(options: opts) else {
-            return nil
-        }
-        self.synthesizer = syn
+
+        self.synthesizer = try Self.makeSynthesizer(options: opts)
         self.status = .created
         setupMemoryPressureMonitoring()
     }
@@ -493,7 +508,11 @@ public class Piper: NSObject {
                 }
                 
                 if synthesizer == nil {
-                    synthesizer = Self.makeSynthesizer(modelPath: modelPath, configPath: configPath, espeakData: espeakData, dataDir: dataDir, g2pwDir: g2pwModelDir)
+                    synthesizer = try? Self.makeSynthesizer(modelPath: modelPath,
+                                                            configPath: configPath.isEmpty ? nil : configPath,
+                                                            espeakData: espeakData,
+                                                            dataDir: dataDir,
+                                                            g2pwDir: g2pwModelDir)
                 }
 
                 guard synthesizer != nil else {

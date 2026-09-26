@@ -31,7 +31,6 @@ public final class PiperPlayer: @unchecked Sendable {
 #if canImport(AVFoundation)
     enum PlayerError: Error {
         case noPlayer
-        case noPiperBackend
     }
 #endif
 
@@ -43,12 +42,10 @@ public final class PiperPlayer: @unchecked Sendable {
 #endif
 
     public init(params: Params) throws {
-        guard let piper = piper_objc.Piper(modelPath: params.modelPath,
-                                           configPath: params.configPath,
-                                           espeakNGData: params.espeakNGData) else {
-            throw PlayerError.noPiperBackend
-        }
-        self.piper = piper
+        // Piper creation failures now surface as PiperError and propagate to the caller.
+        self.piper = try piper_objc.Piper(modelPath: params.modelPath,
+                                          configPath: params.configPath,
+                                          espeakNGData: params.espeakNGData)
 #if canImport(AVFoundation)
         try FileManager.default.createTempFolderIfNeeded(at: String.temporaryFolderPath)
 #endif
