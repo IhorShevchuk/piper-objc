@@ -82,9 +82,15 @@ await player.stopAndCancel()
 ```objc
 #import <piper_objc/piper_objc.h>
 
+NSError *error = nil;
 Piper *piper = [[Piper alloc] initWithModelPath:@"model.onnx"
                                       configPath:@"model.onnx.json"
-                                    espeakNGData:@""];
+                                    espeakNGData:@""
+                                           error:&error];
+if (piper == nil) {
+    // error.domain == PiperError.domain, error.code is a PiperErrorCode
+    NSLog(@"Piper init failed: %@", error);
+}
 
 // Synthesize text to file
 [piper synthesize:@"Hello" toFileAtPath:@"/tmp/out.wav" completion:^{

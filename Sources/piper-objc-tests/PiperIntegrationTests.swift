@@ -28,31 +28,31 @@ struct PiperIntegrationTests {
     }
 
     /// Creates a mock Piper instance for testing.
-    private func makeMockPiper() -> MockPiper? {
-        return MockPiper(
+    private func makeMockPiper() throws -> MockPiper {
+        return try MockPiper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
         )
     }
     @Test("Piper initializes correctly with downloaded models")
-    func testPiperInitialization() {
-        let piper = Piper(
+    func testPiperInitialization() throws {
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
         )
-        
-        #expect(piper != nil)
+
+        #expect(piper.status == .created)
     }
 
     @Test("Piper synthesizes text to a WAV file")
-    func testSynthesisToFile() async {
-        let piper = Piper(
+    func testSynthesisToFile() async throws {
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
         
         let outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("test_output.wav").path
         
@@ -71,11 +71,11 @@ struct PiperIntegrationTests {
 
     @Test("Piper delivers markers to delegate during synthesis")
     func testMarkerDelegate() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
         let testString = "Hello world. This is a test."
@@ -93,11 +93,11 @@ struct PiperIntegrationTests {
 
     @Test("Plain text synthesis generates sentence and word markers")
     func testWordAndSentenceMarkers() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
         let testString = "This is a test."
@@ -125,11 +125,11 @@ struct PiperIntegrationTests {
 
     @Test("SSML synthesis generates correct sentence and word markers")
     func testSSMLWordAndSentenceMarkers() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
         // The text inside the tags is "This is a test."
@@ -157,11 +157,11 @@ struct PiperIntegrationTests {
 
     @Test("Piper synthesizes SSML and notifies delegate")
     func testSSMLSynthesis() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
 
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
@@ -185,11 +185,11 @@ struct PiperIntegrationTests {
 
     @Test("Piper handles cancellation correctly")
     func testSynthesisCancellation() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
 
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
@@ -215,11 +215,11 @@ struct PiperIntegrationTests {
 
     @Test("Prosody rate actually affects sample count")
     func testSSMLRateImpact() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
 
         let delegateNormal = TestPiperDelegate()
         let delegateFast = TestPiperDelegate()
@@ -241,11 +241,11 @@ struct PiperIntegrationTests {
 
     @Test("Piper handles empty strings gracefully")
     func testEmptyStringSynthesis() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
 
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
@@ -264,11 +264,11 @@ struct PiperIntegrationTests {
 
     @Test("Piper recreates synthesizer when memory threshold is exceeded")
     func testMemoryThresholdRecreation() async throws {
-        let piper = Piper(
+        let piper = try Piper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
 
         // Set threshold to 1 byte to guarantee recreation is triggered
         piper.memoryThresholdBytes = 1
@@ -304,11 +304,11 @@ struct PiperIntegrationTests {
 
 
         // --- Run the test with the memory threshold enabled ---
-        let piper = MockPiper(
+        let piper = try MockPiper(
             modelPath: PiperTestAssets.modelPath,
             configPath: PiperTestAssets.configPath,
             espeakNGData: PiperTestAssets.espeakNGDataPath
-        )!
+        )
         piper.delegate = delegate
         piper.memoryThresholdBytes = memoryLimitBytes
 
@@ -329,10 +329,7 @@ struct PiperIntegrationTests {
 
     @Test("Threshold Not Set: Synthesizer is NOT recreated even with high memory")
     func testThresholdNotSet() async throws {
-        guard let piper = makeMockPiper() else {
-            #expect(Bool(false), "Failed to initialize MockPiper")
-            return
-        }
+        let piper = try makeMockPiper()
 
         // Set a high mock memory usage
         piper.memoryToReport = 1_000_000_000 // 1 GB
@@ -351,10 +348,7 @@ struct PiperIntegrationTests {
 
     @Test("Threshold Not Exceeded: Synthesizer is NOT recreated")
     func testThresholdNotExceeded() async throws {
-        guard let piper = makeMockPiper() else {
-            #expect(Bool(false), "Failed to initialize MockPiper")
-            return
-        }
+        let piper = try makeMockPiper()
 
         piper.memoryToReport = 500 // 500 bytes of memory usage
         piper.memoryThresholdBytes = 1000 // Threshold is 1000 bytes
@@ -371,10 +365,7 @@ struct PiperIntegrationTests {
 
     @Test("Threshold Exceeded: Synthesizer IS recreated")
     func testThresholdExceeded() async throws {
-        guard let piper = makeMockPiper() else {
-            #expect(Bool(false), "Failed to initialize MockPiper")
-            return
-        }
+        let piper = try makeMockPiper()
 
         piper.memoryToReport = 1001 // 1001 bytes of memory usage
         piper.memoryThresholdBytes = 1000 // Threshold is 1000 bytes
@@ -391,10 +382,7 @@ struct PiperIntegrationTests {
 
     @Test("Threshold Exactly Met: Synthesizer is NOT recreated")
     func testThresholdExactlyMet() async throws {
-        guard let piper = makeMockPiper() else {
-            #expect(Bool(false), "Failed to initialize MockPiper")
-            return
-        }
+        let piper = try makeMockPiper()
 
         piper.memoryToReport = 1000 // Exactly 1000 bytes
         piper.memoryThresholdBytes = 1000 // Threshold is 1000 bytes
@@ -411,10 +399,7 @@ struct PiperIntegrationTests {
 
     @Test("Zero Threshold: Synthesizer is recreated for each sentence")
     func testZeroThreshold() async throws {
-        guard let piper = makeMockPiper() else {
-            #expect(Bool(false), "Failed to initialize MockPiper")
-            return
-        }
+        let piper = try makeMockPiper()
 
         piper.memoryToReport = 1 // Report minimal memory usage
         piper.memoryThresholdBytes = 0 // Threshold is 0, so it will always be exceeded
@@ -439,10 +424,7 @@ struct PiperIntegrationTests {
             dataDir: nil,
             g2pwModelDir: nil
         )
-        guard let piper = Piper(options: options) else {
-            #expect(Bool(false), "Failed to initialize Piper with modern options API")
-            return
-        }
+        let piper = try Piper(options: options)
 
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
@@ -462,7 +444,7 @@ struct PiperIntegrationTests {
         #expect(size > 1024, "WAV from modern API should be >1KB (found \(size) bytes)")
 
         // Also verify delegate path produces markers and samples
-        let piper2 = Piper(options: options)!
+        let piper2 = try Piper(options: options)
         let delegate2 = TestPiperDelegate()
         piper2.delegate = delegate2
         piper2.synthesize("Modern API marker test. Second sentence.")
@@ -491,10 +473,7 @@ struct PiperIntegrationTests {
             dataDir: FileManager.default.temporaryDirectory.path, // valid dir but irrelevant for English
             g2pwModelDir: nil
         )
-        guard let piper = Piper(options: options) else {
-            #expect(Bool(false), "Modern API with dataDir should still init for English voice")
-            return
-        }
+        let piper = try Piper(options: options)
         let delegate = TestPiperDelegate()
         piper.delegate = delegate
         piper.synthesize("Data dir option should not break English synthesis.")
